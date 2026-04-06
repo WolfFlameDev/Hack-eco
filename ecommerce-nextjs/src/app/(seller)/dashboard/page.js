@@ -1,0 +1,149 @@
+'use client';
+
+import { useAuth } from '@/hooks/useAuth';
+import { useRouter } from 'next/navigation';
+import { useEffect } from 'react';
+import Link from 'next/link';
+
+export default function SellerDashboard() {
+  const { user, isAuthenticated, logout, isSeller } = useAuth();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (!isAuthenticated) {
+      router.push('/auth/login');
+      return;
+    }
+
+    if (!isSeller()) {
+      // Redirect to appropriate dashboard
+      if (user?.role === 'admin') {
+        router.push('/admin/dashboard');
+      } else if (user?.role === 'user') {
+        router.push('/user/dashboard');
+      }
+      return;
+    }
+  }, [isAuthenticated, user, router, isSeller]);
+
+  if (!isAuthenticated || !isSeller()) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-50">
+      {/* Header */}
+      <header className="bg-white shadow">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between items-center py-4">
+            <div className="flex items-center">
+              <h1 className="text-2xl font-bold text-gray-900">EcoCommerce - Seller</h1>
+            </div>
+            <div className="flex items-center space-x-4">
+              <span className="text-gray-700">Welcome, {user.name}</span>
+              <button
+                onClick={logout}
+                className="bg-red-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-red-700"
+              >
+                Logout
+              </button>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      {/* Main Content */}
+      <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+        <div className="px-4 py-6 sm:px-0">
+          <div className="border-4 border-dashed border-gray-200 rounded-lg p-8">
+            <div className="text-center">
+              <h2 className="text-2xl font-semibold text-gray-900 mb-4">
+                Seller Dashboard
+              </h2>
+              <p className="text-gray-600 mb-6">
+                Manage your eco-friendly products and grow your sustainable business!
+              </p>
+
+              {/* Quick Actions */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-4xl mx-auto">
+                <Link href="/seller/add-product" className="bg-white p-6 rounded-lg shadow-md hover:shadow-lg transition-shadow">
+                  <div className="text-center">
+                    <div className="bg-green-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                      </svg>
+                    </div>
+                    <h3 className="text-lg font-semibold text-gray-900 mb-2">Add Product</h3>
+                    <p className="text-gray-600 text-sm mb-4">List a new sustainable product for sale.</p>
+                    <span className="bg-green-600 text-white px-4 py-2 rounded-md text-sm font-medium">
+                      Add Product
+                    </span>
+                  </div>
+                </Link>
+
+                <div className="bg-white p-6 rounded-lg shadow-md">
+                  <div className="text-center">
+                    <div className="bg-blue-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <svg className="w-8 h-8 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                      </svg>
+                    </div>
+                    <h3 className="text-lg font-semibold text-gray-900 mb-2">My Products</h3>
+                    <p className="text-gray-600 text-sm mb-4">Manage your product listings and inventory.</p>
+                    <button className="bg-blue-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-blue-700">
+                      View Products
+                    </button>
+                  </div>
+                </div>
+
+                <div className="bg-white p-6 rounded-lg shadow-md">
+                  <div className="text-center">
+                    <div className="bg-purple-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <svg className="w-8 h-8 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                      </svg>
+                    </div>
+                    <h3 className="text-lg font-semibold text-gray-900 mb-2">Sales Analytics</h3>
+                    <p className="text-gray-600 text-sm mb-4">View your sales performance and insights.</p>
+                    <button className="bg-purple-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-purple-700">
+                      View Analytics
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Seller Info */}
+              <div className="mt-8 bg-white p-6 rounded-lg shadow-md max-w-md mx-auto">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Seller Information</h3>
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Name:</span>
+                    <span className="font-medium">{user.name}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Email:</span>
+                    <span className="font-medium">{user.email}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Role:</span>
+                    <span className="font-medium capitalize">{user.role}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Status:</span>
+                    <span className={`font-medium ${user.isVerified ? 'text-green-600' : 'text-yellow-600'}`}>
+                      {user.isVerified ? 'Verified' : 'Pending Verification'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </main>
+    </div>
+  );
+}
