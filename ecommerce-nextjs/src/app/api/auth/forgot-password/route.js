@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import connectDB from '@/lib/db';
 import User from '@/models/User';
-import { sendPasswordResetEmail } from '@/lib/email';
+import { sendOTPEmail } from '@/lib/email';
 import crypto from 'crypto';
 
 export async function POST(request) {
@@ -23,26 +23,26 @@ export async function POST(request) {
     if (!user) {
       // Don't reveal if email exists or not for security
       return NextResponse.json({
-        message: 'If an account with that email exists, a password reset link has been sent.',
+        message: 'If an account with that email exists, an OTP has been sent.',
       });
     }
 
-    // Generate reset token
-    const resetToken = crypto.randomBytes(32).toString('hex');
-    const resetTokenExpiry = Date.now() + 3600000; // 1 hour
+    // Generate OTP
+    const otp = Math.floor(100000 + Math.random() * 900000).toString(); // 6-digit OTP
+    const otpExpiry = Date.now() + 600000; // 10 minutes
 
-    // Save reset token
-    user.resetPasswordToken = resetToken;
-    user.resetPasswordExpires = resetTokenExpiry;
+    // Save OTP
+    user.otp = otp;
+    user.otpExpiry = otpExpiry;
     await user.save();
 
-    // Send reset email
+    // Send OTP email
     try {
-      await sendPasswordResetEmail(email, resetToken);
+      await sendOTPEmail(email, otp);
     } catch (emailError) {
-      console.error('Reset email failed:', emailError);
+      console.error('OTP email failed:', emailError);
       return NextResponse.json(
-        { error: 'Failed to send reset email' },
+        { error: 'Failed to send OTP email' },
         { status: 500 }
       );
     }

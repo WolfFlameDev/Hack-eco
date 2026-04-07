@@ -7,28 +7,33 @@ export async function POST(request) {
   try {
     await connectDB();
 
-    const { token } = await request.json();
+    const { email, otp } = await request.json();
 
-    if (!token) {
+    if (!email || !otp) {
       return NextResponse.json(
-        { error: 'Verification token is required' },
+        { error: 'Email and OTP are required' },
         { status: 400 }
       );
     }
 
-    // Find user with verification token
-    const user = await User.findOne({ verificationToken: token });
+    // Find user with email and valid OTP
+    const user = await User.findOne({
+      email,
+      otp,
+      otpExpiry: { $gt: Date.now() },
+    });
 
     if (!user) {
       return NextResponse.json(
-        { error: 'Invalid or expired verification token' },
+        { error: 'Invalid or expired OTP' },
         { status: 400 }
       );
     }
 
     // Update user as verified
     user.isVerified = true;
-    user.verificationToken = undefined;
+    user.otp = undefined;
+    user.otpExpiry = undefined;
     await user.save();
 
     // Send welcome email

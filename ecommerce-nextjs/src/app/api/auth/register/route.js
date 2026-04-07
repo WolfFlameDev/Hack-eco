@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import connectDB from '@/lib/db';
 import User from '@/models/User';
 import { generateToken } from '@/lib/jwt';
-import { sendVerificationEmail, sendWelcomeEmail } from '@/lib/email';
+import { sendOTPEmail, sendWelcomeEmail } from '@/lib/email';
 import crypto from 'crypto';
 
 export async function POST(request) {
@@ -36,8 +36,9 @@ export async function POST(request) {
       );
     }
 
-    // Generate verification token
-    const verificationToken = crypto.randomBytes(32).toString('hex');
+    // Generate OTP
+    const otp = Math.floor(100000 + Math.random() * 900000).toString(); // 6-digit OTP
+    const otpExpiry = Date.now() + 600000; // 10 minutes
 
     // Create user
     const user = new User({
@@ -45,14 +46,15 @@ export async function POST(request) {
       email,
       password,
       role,
-      verificationToken,
+      otp,
+      otpExpiry,
     });
 
     await user.save();
 
-    // Send verification email
+    // Send OTP email
     try {
-      await sendVerificationEmail(email, verificationToken);
+      await sendOTPEmail(email, otp);
     } catch (emailError) {
       console.error('Email sending failed:', emailError);
       // Don't fail registration if email fails

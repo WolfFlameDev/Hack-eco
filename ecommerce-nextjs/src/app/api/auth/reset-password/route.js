@@ -7,11 +7,11 @@ export async function POST(request) {
   try {
     await connectDB();
 
-    const { token, password } = await request.json();
+    const { email, otp, password } = await request.json();
 
-    if (!token || !password) {
+    if (!email || !otp || !password) {
       return NextResponse.json(
-        { error: 'Token and password are required' },
+        { error: 'Email, OTP and password are required' },
         { status: 400 }
       );
     }
@@ -23,15 +23,16 @@ export async function POST(request) {
       );
     }
 
-    // Find user with reset token
+    // Find user with email and valid OTP
     const user = await User.findOne({
-      resetPasswordToken: token,
-      resetPasswordExpires: { $gt: Date.now() },
+      email,
+      otp,
+      otpExpiry: { $gt: Date.now() },
     });
 
     if (!user) {
       return NextResponse.json(
-        { error: 'Invalid or expired reset token' },
+        { error: 'Invalid or expired OTP' },
         { status: 400 }
       );
     }
@@ -42,8 +43,8 @@ export async function POST(request) {
 
     // Update user
     user.password = hashedPassword;
-    user.resetPasswordToken = undefined;
-    user.resetPasswordExpires = undefined;
+    user.otp = undefined;
+    user.otpExpiry = undefined;
     await user.save();
 
     return NextResponse.json({

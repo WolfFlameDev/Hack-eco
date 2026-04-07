@@ -108,9 +108,9 @@ class AuthService {
     }
   }
 
-  async verifyEmail(token) {
+  async verifyEmail(email, otp) {
     try {
-      const response = await this.api.post('/api/auth/verify', { token });
+      const response = await this.api.post('/api/auth/verify', { email, otp });
       const currentUser = this.getUser();
       if (currentUser) {
         currentUser.isVerified = true;
@@ -131,10 +131,11 @@ class AuthService {
     }
   }
 
-  async resetPassword(token, password) {
+  async resetPassword(email, otp, password) {
     try {
       const response = await this.api.post('/api/auth/reset-password', {
-        token,
+        email,
+        otp,
         password,
       });
       return response.data;

@@ -1,23 +1,20 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/hooks/useAuth';
 import { Toaster, toast } from 'sonner';
 
-export default function VerifyEmailPage() {
+export default function VerifyEmailForm({ token }) {
   const [verifying, setVerifying] = useState(true);
   const [verified, setVerified] = useState(false);
   const [error, setError] = useState('');
 
   const { verifyEmail } = useAuth();
   const router = useRouter();
-  const searchParams = useSearchParams();
 
   useEffect(() => {
-    const token = searchParams.get('token');
-
     if (!token) {
       setError('Invalid verification link');
       setVerifying(false);
@@ -41,7 +38,7 @@ export default function VerifyEmailPage() {
     };
 
     verify();
-  }, [searchParams, verifyEmail, router]);
+  }, [token, verifyEmail, router]);
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">

@@ -1,12 +1,12 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/hooks/useAuth';
 import { Toaster, toast } from 'sonner';
 
-export default function ResetPasswordPage() {
+export default function ResetPasswordForm({ token }) {
   const [formData, setFormData] = useState({
     password: '',
     confirmPassword: '',
@@ -15,9 +15,6 @@ export default function ResetPasswordPage() {
 
   const { resetPassword, loading, error } = useAuth();
   const router = useRouter();
-  const searchParams = useSearchParams();
-
-  const token = searchParams.get('token');
 
   useEffect(() => {
     if (!token) {

@@ -1,6 +1,6 @@
 import nodemailer from 'nodemailer';
 
-const transporter = nodemailer.createTransporter({
+const transporter = nodemailer.createTransport({
   service: 'gmail',
   auth: {
     user: process.env.EMAIL_USER,
@@ -61,22 +61,18 @@ export const sendPasswordResetEmail = async (email, token) => {
   return await sendEmail(email, 'Reset Your Password - EcoCommerce', html);
 };
 
-export const sendWelcomeEmail = async (email, name) => {
+export const sendOTPEmail = async (email, otp) => {
   const html = `
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-      <h2>Welcome to EcoCommerce, ${name}!</h2>
-      <p>Thank you for joining our platform. Your account has been successfully created.</p>
-      <p>You can now:</p>
-      <ul>
-        <li>Browse our eco-friendly products</li>
-        <li>Make sustainable purchases</li>
-        <li>Track your orders</li>
-        <li>Manage your profile</li>
-      </ul>
-      <p>Happy shopping!</p>
-      <p>The EcoCommerce Team</p>
+      <h2>Email Verification</h2>
+      <p>Your OTP for email verification is:</p>
+      <div style="font-size: 24px; font-weight: bold; color: #4CAF50; text-align: center; margin: 20px 0;">
+        ${otp}
+      </div>
+      <p>This OTP will expire in 10 minutes.</p>
+      <p>If you didn't request this, please ignore this email.</p>
     </div>
   `;
 
-  return await sendEmail(email, 'Welcome to EcoCommerce!', html);
+  return await sendEmail(email, 'Email Verification OTP - EcoCommerce', html);
 };
