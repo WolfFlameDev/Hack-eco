@@ -1,6 +1,10 @@
 import { NextResponse } from 'next/server';
 import connectDB from '@/lib/db';
 import Product from '@/models/Product';
+import User from '@/models/User';
+
+// Ensure User model is registered for Product.seller populate().
+void User;
 
 export async function GET(request) {
   try {
