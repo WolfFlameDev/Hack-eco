@@ -41,12 +41,7 @@ const productSchema = new mongoose.Schema({
     type: String,
     trim: true,
   }],
-  sustainability: {
-    ecoFriendly: { type: Boolean, default: false },
-    recyclable: { type: Boolean, default: false },
-    organic: { type: Boolean, default: false },
-    carbonFootprint: { type: String, default: '' },
-  },
+
   createdAt: {
     type: Date,
     default: Date.now,
