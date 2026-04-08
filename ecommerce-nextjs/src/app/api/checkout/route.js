@@ -1,7 +1,8 @@
-import { db } from '@/lib/db';
+import connectDB from '@/lib/db';
 import { processPayment } from '@/services/paymentService';
 
 export default async function handler(req, res) {
+  const db = await connectDB();
   const { method } = req;
 
   if (method !== 'POST') {

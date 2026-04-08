@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -32,7 +32,7 @@ export default function ResetPasswordPage() {
 
   const { resetPassword, loading } = useAuth();
   const router = useRouter();
-  const searchParams = useSearchParams();
+  const [token, setToken] = useState('');
 
   const {
     register,
@@ -42,16 +42,18 @@ export default function ResetPasswordPage() {
     resolver: zodResolver(resetPasswordSchema),
   });
 
-  const token = searchParams.get('token');
-
   useEffect(() => {
-    if (!token) {
+    const params = new URLSearchParams(window.location.search);
+    const tokenParam = params.get('token');
+    if (!tokenParam) {
       toast.error('Invalid reset link', {
         description: 'Please check your email for the correct reset link.',
       });
       router.push('/auth/forgot-password');
+      return;
     }
-  }, [token, router]);
+    setToken(tokenParam);
+  }, [router]);
 
   const onSubmit = async (data) => {
     try {

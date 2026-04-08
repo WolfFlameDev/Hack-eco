@@ -1,6 +1,7 @@
-import { db } from '@/lib/db';
+import connectDB from '@/lib/db';
 
 export default async function handler(req, res) {
+  const db = await connectDB();
   const { method } = req;
 
   switch (method) {

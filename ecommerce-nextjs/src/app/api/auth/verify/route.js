@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import connectDB from '@/lib/db';
 import User from '@/models/User';
-import { sendWelcomeEmail } from '@/lib/email';
+import { sendEmail } from '@/lib/email';
 
 export async function POST(request) {
   try {
@@ -38,7 +38,11 @@ export async function POST(request) {
 
     // Send welcome email
     try {
-      await sendWelcomeEmail(user.email, user.name);
+      await sendEmail(
+        user.email,
+        'Welcome to EcoCommerce',
+        `<p>Hi ${user.name},</p><p>Your email is verified successfully. Welcome to EcoCommerce!</p>`
+      );
     } catch (emailError) {
       console.error('Welcome email failed:', emailError);
     }
