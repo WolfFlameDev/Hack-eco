@@ -54,6 +54,18 @@ export const useAuth = () => {
     }
   };
 
+  const demoLogin = async () => {
+    try {
+      dispatch(loginStart());
+      const response = await authService.demoLogin();
+      dispatch(loginSuccess(response));
+      return response;
+    } catch (error) {
+      dispatch(loginFailure(error.error || 'Demo login failed'));
+      throw error;
+    }
+  };
+
   const register = async (userData) => {
     try {
       dispatch(registerStart());
@@ -130,6 +142,7 @@ export const useAuth = () => {
 
     // Actions
     login,
+    demoLogin,
     register,
     verifyEmail,
     forgotPassword,

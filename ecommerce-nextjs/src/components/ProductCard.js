@@ -1,14 +1,21 @@
 import { useCart } from '@/hooks/useCart';
 import { useState } from 'react';
+import { addToCart as addToCartAPI } from '@/services/cart_add';
 
 export default function ProductCard({ product }) {
   const { addToCart } = useCart();
   const [isAdded, setIsAdded] = useState(false);
 
-  const handleAddToCart = () => {
-    addToCart(product);
-    setIsAdded(true);
-    setTimeout(() => setIsAdded(false), 2000); // Reset after 2 seconds
+  const handleAddToCart = async () => {
+    try {
+      const result = await addToCartAPI(product._id, 1);
+      console.log('Added to cart', result);
+      addToCart(product); // Update Redux state
+      setIsAdded(true);
+      setTimeout(() => setIsAdded(false), 2000);
+    } catch (err) {
+      console.error('Error adding to cart:', err.message);
+    }
   };
 
   return (

@@ -94,6 +94,21 @@ class AuthService {
     }
   }
 
+  async demoLogin() {
+    const user = {
+      name: 'Cyber',
+      email: 'cyber@demo.com',
+      role: 'user',
+      isVerified: true,
+    };
+    const token = 'demo-token-cyber-1234';
+
+    this.setToken(token);
+    this.setUser(user);
+
+    return { user, token };
+  }
+
   async register(userData) {
     try {
       const response = await this.api.post('/api/auth/register', userData);

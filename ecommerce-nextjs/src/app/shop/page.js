@@ -15,13 +15,21 @@ export default function ShopPage() {
         setError('');
 
         const response = await fetch('/api/product/get?page=1&limit=12');
-        const data = await response.json();
+        const text = await response.text();
+        let data;
 
-        if (!response.ok) {
-          throw new Error(data.error || 'Failed to fetch products');
+        try {
+          data = JSON.parse(text);
+        } catch (parseError) {
+          data = null;
         }
 
-        setProducts(data.products || []);
+        if (!response.ok) {
+          const serverError = data?.error || text || 'Failed to fetch products';
+          throw new Error(serverError);
+        }
+
+        setProducts(data?.products || []);
       } catch (err) {
         setError(err.message || 'Something went wrong');
       } finally {
