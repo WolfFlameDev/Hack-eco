@@ -14,6 +14,7 @@ const ROWS = [
   { key: 'category',    label: 'Category' },
   { key: 'stock',       label: 'Stock' },
   { key: 'rating',      label: 'Rating' },
+  { key: 'tags',        label: 'Specifications' },
   { key: 'description', label: 'Description' },
 ];
 
@@ -43,6 +44,23 @@ function CellValue({ product, rowKey, best }) {
 
   if (rowKey === 'description') {
     return <p className="text-sm leading-6 text-slate-600">{val}</p>;
+  }
+
+  if (rowKey === 'tags') {
+    const tags = Array.isArray(val) ? val : [];
+    if (!tags.length) {
+      return <span className="text-slate-400">No specifications</span>;
+    }
+
+    return (
+      <div className="flex flex-wrap justify-center gap-1.5">
+        {tags.map((tag, index) => (
+          <span key={`${tag}-${index}`} className="rounded-full bg-slate-100 px-2 py-1 text-xs text-slate-700">
+            {tag}
+          </span>
+        ))}
+      </div>
+    );
   }
 
   const numVal = Number(val ?? 0);
@@ -142,7 +160,7 @@ export default function ComparePage() {
 
         {/* Comparison Table */}
         <div className="overflow-x-auto rounded-3xl border border-slate-200 bg-white shadow-sm">
-          <table className="w-full min-w-[600px] border-collapse">
+          <table className="w-full min-w-150 border-collapse">
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50">
                 {/* Feature label column */}
@@ -152,7 +170,7 @@ export default function ComparePage() {
                 {products.map((product) => (
                   <th key={product.id} className="px-5 py-4 text-center">
                     <div className="flex flex-col items-center gap-2">
-                      <span className="line-clamp-1 max-w-[160px] text-sm font-black text-slate-900">
+                      <span className="line-clamp-1 max-w-40 text-sm font-black text-slate-900">
                         {product.title}
                       </span>
                       <button

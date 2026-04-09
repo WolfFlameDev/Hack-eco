@@ -64,6 +64,23 @@ export default function UserDashboard() {
     };
   }, [isAuthenticated, user?.role]);
 
+  useEffect(() => {
+    if (!(isAuthenticated && user?.role === 'user')) {
+      return;
+    }
+
+    const timer = setInterval(async () => {
+      try {
+        const data = await getOrders('user');
+        setOrders(data.orders ?? []);
+      } catch {
+        // ignore transient poll errors, next cycle retries
+      }
+    }, 15000);
+
+    return () => clearInterval(timer);
+  }, [isAuthenticated, user?.role]);
+
   const summary = useMemo(() => {
     return orders.reduce(
       (acc, order) => {
@@ -103,6 +120,12 @@ export default function UserDashboard() {
               className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700"
             >
               Continue Shopping
+            </Link>
+            <Link
+              href="/user/recommendations"
+              className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-700"
+            >
+              AI Recommendations
             </Link>
             <button
               onClick={logout}
@@ -146,6 +169,30 @@ export default function UserDashboard() {
                     <span className="font-semibold text-slate-900">Rs {(order.totalAmount ?? 0).toFixed(2)}</span>
                   </div>
 
+                  {order.trackingDetails?.trackingNumber || order.trackingDetails?.trackingUrl ? (
+                    <div className="mt-3 rounded-lg border border-blue-100 bg-blue-50 p-3 text-xs text-blue-900">
+                      <p className="font-semibold">Shipping</p>
+                      <p>Tracking Number: {order.trackingDetails.trackingNumber || 'Not provided'}</p>
+                      <p>Carrier: {order.trackingDetails.carrier || 'Not provided'}</p>
+                      <p>
+                        Estimated Delivery:{' '}
+                        {order.trackingDetails.estimatedDelivery
+                          ? new Date(order.trackingDetails.estimatedDelivery).toLocaleDateString()
+                          : 'Not provided'}
+                      </p>
+                      {order.trackingDetails.trackingUrl ? (
+                        <a
+                          href={order.trackingDetails.trackingUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="mt-1 inline-block font-semibold text-blue-700 hover:text-blue-900"
+                        >
+                          Track Shipment
+                        </a>
+                      ) : null}
+                    </div>
+                  ) : null}
+
                   <div className="mt-4 space-y-2">
                     {(order.items ?? []).map((item) => (
                       <div key={item.id} className="flex items-center justify-between text-sm">
@@ -176,6 +223,8 @@ function StatCard({ label, value }) {
 function StatusBadge({ label }) {
   const map = {
     pending: 'bg-amber-100 text-amber-800',
+    confirmed: 'bg-cyan-100 text-cyan-800',
+    processing: 'bg-indigo-100 text-indigo-800',
     shipped: 'bg-blue-100 text-blue-800',
     delivered: 'bg-green-100 text-green-800',
   };

@@ -1,5 +1,7 @@
 import mongoose from 'mongoose';
 
+export const ORDER_STATUS_FLOW = ['pending', 'confirmed', 'processing', 'shipped', 'delivered'];
+
 const orderItemSchema = new mongoose.Schema(
   {
     product: {
@@ -38,7 +40,7 @@ const orderItemSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ['pending', 'shipped', 'delivered'],
+      enum: ORDER_STATUS_FLOW,
       default: 'pending',
     },
   },
@@ -88,8 +90,35 @@ const orderSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ['pending', 'shipped', 'delivered'],
+      enum: ORDER_STATUS_FLOW,
       default: 'pending',
+    },
+    statusTimeline: {
+      confirmedAt: Date,
+      processingAt: Date,
+      shippedAt: Date,
+      deliveredAt: Date,
+    },
+    trackingDetails: {
+      carrier: {
+        type: String,
+        default: '',
+      },
+      trackingNumber: {
+        type: String,
+        default: '',
+      },
+      trackingUrl: {
+        type: String,
+        default: '',
+      },
+      estimatedDelivery: Date,
+      shippedAt: Date,
+      notes: {
+        type: String,
+        default: '',
+      },
+      lastUpdatedAt: Date,
     },
     paymentProvider: {
       type: String,
@@ -101,7 +130,7 @@ const orderSchema = new mongoose.Schema(
       razorpaySignature: String,
       mode: {
         type: String,
-        enum: ['live', 'test', 'mock'],
+        enum: ['live', 'test', 'mock', 'cod'],
         default: 'mock',
       },
     },

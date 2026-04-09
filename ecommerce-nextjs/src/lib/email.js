@@ -6,43 +6,36 @@ const emailUser = process.env.EMAIL_USER?.trim();
 const emailPass = process.env.EMAIL_PASS?.trim();
 const fromEmail = process.env.FROM_EMAIL?.trim() || emailUser;
 const fromName = process.env.FROM_NAME?.trim() || 'EcoCommerce';
+const EMAIL_MAX_RETRIES = Number(process.env.EMAIL_MAX_RETRIES ?? 3);
+const EMAIL_RETRY_DELAY_MS = Number(process.env.EMAIL_RETRY_DELAY_MS ?? 1000);
 
-console.log('Email config:', {
-  smtpHost,
-  smtpPort,
-  emailUser: emailUser ? 'SET' : 'NOT SET',
-  emailPass: emailPass ? 'SET' : 'NOT SET',
-  fromEmail,
-  fromName,
-});
+const isEmailConfigured = !!(emailUser && emailPass && fromEmail);
 
-if (!emailUser || !emailPass || !fromEmail) {
-  console.error('Missing SMTP settings:', {
-    EMAIL_USER: !!emailUser,
-    EMAIL_PASS: !!emailPass,
-    FROM_EMAIL: !!fromEmail,
-  });
-  throw new Error('SMTP settings are required: EMAIL_USER, EMAIL_PASS, and FROM_EMAIL.');
+if (!isEmailConfigured) {
+  console.warn('Email disabled: SMTP settings (EMAIL_USER, EMAIL_PASS, FROM_EMAIL) are not configured.');
 }
 
-const transporter = nodemailer.createTransport({
-  host: smtpHost,
-  port: smtpPort,
-  secure: smtpPort === 465,
-  auth: {
-    user: emailUser,
-    pass: emailPass,
-  },
-});
+let transporter = null;
+if (isEmailConfigured) {
+  transporter = nodemailer.createTransport({
+    host: smtpHost,
+    port: smtpPort,
+    secure: smtpPort === 465,
+    auth: {
+      user: emailUser,
+      pass: emailPass,
+    },
+  });
 
-transporter.verify().then(
-  () => {
-    console.log('SMTP transporter verified successfully.');
-  },
-  (error) => {
-    console.warn('SMTP transporter verification failed:', error.message);
-  }
-);
+  transporter.verify().then(
+    () => {
+      console.log('SMTP transporter verified successfully.');
+    },
+    (error) => {
+      console.warn('SMTP transporter verification failed:', error.message);
+    }
+  );
+}
 
 const getFromAddress = () => {
   return process.env.FROM_EMAIL
@@ -51,22 +44,29 @@ const getFromAddress = () => {
 };
 
 export const sendEmail = async (to, subject, html) => {
-  console.log('Attempting to send email to:', to, 'subject:', subject);
-  try {
-    const mailOptions = {
-      from: getFromAddress(),
-      to,
-      subject,
-      html,
-    };
+  if (!transporter) {
+    console.warn('Email skipped (SMTP not configured):', subject);
+    return null;
+  }
+  const mailOptions = {
+    from: getFromAddress(),
+    to,
+    subject,
+    html,
+  };
 
-    console.log('Mail options:', { from: mailOptions.from, to: mailOptions.to, subject: mailOptions.subject });
-    const result = await transporter.sendMail(mailOptions);
-    console.log('Email sent successfully:', result.messageId);
-    return result;
-  } catch (error) {
-    console.error('Email sending failed:', error);
-    throw error;
+  for (let attempt = 1; attempt <= EMAIL_MAX_RETRIES; attempt += 1) {
+    try {
+      const result = await transporter.sendMail(mailOptions);
+      console.log(`Email sent successfully on attempt ${attempt}:`, result.messageId);
+      return result;
+    } catch (error) {
+      console.error(`Email sending failed (attempt ${attempt}/${EMAIL_MAX_RETRIES}):`, error.message);
+      if (attempt >= EMAIL_MAX_RETRIES) {
+        throw error;
+      }
+      await new Promise((resolve) => setTimeout(resolve, EMAIL_RETRY_DELAY_MS * attempt));
+    }
   }
 };
 
@@ -177,18 +177,66 @@ export const sendOrderConfirmationEmail = async (order, user) => {
 };
 
 export const sendOrderStatusEmail = async (order, user, newStatus) => {
-  const statusLabels = { pending: 'Processing', shipped: 'Shipped', delivered: 'Delivered' };
+  const statusLabels = {
+    pending: 'Pending',
+    confirmed: 'Confirmed',
+    processing: 'Processing',
+    shipped: 'Shipped',
+    delivered: 'Delivered',
+  };
   const label = statusLabels[newStatus] ?? newStatus;
+  const tracking = order.trackingDetails || {};
+  const orderCode = String(order._id).slice(-8).toUpperCase();
+  const estimatedDelivery = tracking.estimatedDelivery
+    ? new Date(tracking.estimatedDelivery).toLocaleDateString('en-IN', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+      })
+    : 'To be updated';
+
+  const productRows = (order.items ?? [])
+    .map(
+      (item) =>
+        `<tr>
+          <td style="padding:8px 12px;border-bottom:1px solid #f1f5f9">${item.title}</td>
+          <td style="padding:8px 12px;border-bottom:1px solid #f1f5f9;text-align:center">${item.quantity}</td>
+          <td style="padding:8px 12px;border-bottom:1px solid #f1f5f9;text-align:right">&#8377;${(item.price * item.quantity).toFixed(2)}</td>
+        </tr>`
+    )
+    .join('');
+
+  const trackingLinkHtml = tracking.trackingUrl
+    ? `<p style="margin:8px 0 0"><a href="${tracking.trackingUrl}" style="color:#2563eb;text-decoration:none">Track your shipment</a></p>`
+    : '';
 
   const html = `
     <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;background:#f8fafb;padding:24px;border-radius:16px">
       <h2 style="color:#1e293b">Order Update — EcoCommerce</h2>
-      <p style="color:#475569">Hi <strong>${user.name}</strong>, your order <strong>#${String(order._id).slice(-8).toUpperCase()}</strong> status has been updated.</p>
+      <p style="color:#475569">Hi <strong>${user.name}</strong>, your order <strong>#${orderCode}</strong> status has been updated.</p>
       <div style="background:#dcfce7;border-left:4px solid #16a34a;padding:16px;border-radius:8px;margin:16px 0">
         <p style="margin:0;color:#15803d;font-size:18px;font-weight:bold">${label}</p>
+      </div>
+      <table style="width:100%;border-collapse:collapse;margin:16px 0;background:#fff;border-radius:12px;overflow:hidden">
+        <thead>
+          <tr style="background:#f1f5f9">
+            <th style="padding:10px 12px;text-align:left;font-size:12px;color:#64748b">ITEM</th>
+            <th style="padding:10px 12px;text-align:center;font-size:12px;color:#64748b">QTY</th>
+            <th style="padding:10px 12px;text-align:right;font-size:12px;color:#64748b">TOTAL</th>
+          </tr>
+        </thead>
+        <tbody>${productRows}</tbody>
+      </table>
+      <div style="background:#fff;border:1px solid #e2e8f0;padding:12px 14px;border-radius:10px;color:#334155">
+        <p style="margin:0 0 6px"><strong>Order ID:</strong> ${orderCode}</p>
+        <p style="margin:0 0 6px"><strong>Shipping Status:</strong> ${label}</p>
+        <p style="margin:0 0 6px"><strong>Estimated Delivery:</strong> ${estimatedDelivery}</p>
+        <p style="margin:0 0 6px"><strong>Tracking Number:</strong> ${tracking.trackingNumber || 'Not available yet'}</p>
+        <p style="margin:0"><strong>Carrier:</strong> ${tracking.carrier || 'Not available yet'}</p>
+        ${trackingLinkHtml}
       </div>
       <p style="color:#94a3b8;font-size:12px">EcoCommerce &mdash; Thank you for shopping with us.</p>
     </div>`;
 
-  return await sendEmail(user.email, `Order ${label} #${String(order._id).slice(-8).toUpperCase()} — EcoCommerce`, html);
+  return await sendEmail(user.email, `Order ${label} #${orderCode} — EcoCommerce`, html);
 };

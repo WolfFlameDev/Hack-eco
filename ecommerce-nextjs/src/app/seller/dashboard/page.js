@@ -11,7 +11,18 @@ import { createProduct, deleteProduct, getProducts, updateProduct } from '@/serv
 import { getOrders, updateOrderStatus } from '@/services/orderService';
 import { uploadImages } from '@/services/profileService';
 
-const ORDER_STATUSES = ['pending', 'shipped', 'delivered'];
+const ORDER_STATUSES = ['pending', 'confirmed', 'processing', 'shipped', 'delivered'];
+
+const isStatusSelectable = (currentStatus, candidateStatus) => {
+  const currentIndex = ORDER_STATUSES.indexOf(currentStatus);
+  const candidateIndex = ORDER_STATUSES.indexOf(candidateStatus);
+
+  if (currentIndex === -1 || candidateIndex === -1) {
+    return false;
+  }
+
+  return candidateIndex === currentIndex || candidateIndex === currentIndex + 1;
+};
 
 const EMPTY_FORM = {
   title: '',
@@ -75,6 +86,18 @@ export default function SellerDashboard() {
     if (isAuthenticated && (user?.role === 'seller' || user?.role === 'admin')) {
       loadAll();
     }
+  }, [isAuthenticated, user?.role]);
+
+  useEffect(() => {
+    if (!(isAuthenticated && (user?.role === 'seller' || user?.role === 'admin'))) {
+      return;
+    }
+
+    const timer = setInterval(() => {
+      loadAll();
+    }, 15000);
+
+    return () => clearInterval(timer);
   }, [isAuthenticated, user?.role]);
 
   useEffect(() => {
@@ -219,8 +242,29 @@ export default function SellerDashboard() {
   const onStatusChange = async (orderId, itemId, status) => {
     try {
       setSaving(true);
-      await updateOrderStatus(orderId, status, itemId);
-      await loadAll();
+      let trackingDetails = undefined;
+      if (status === 'shipped') {
+        const trackingNumber = window.prompt('Enter tracking number (optional):', '')?.trim() || '';
+        const carrier = window.prompt('Enter carrier/courier name (optional):', '')?.trim() || '';
+        const trackingUrl = window.prompt('Enter tracking URL (optional):', '')?.trim() || '';
+        const estimatedDeliveryInput = window.prompt('Estimated delivery date (YYYY-MM-DD, optional):', '')?.trim() || '';
+
+        trackingDetails = {
+          trackingNumber,
+          carrier,
+          trackingUrl,
+          ...(estimatedDeliveryInput ? { estimatedDelivery: estimatedDeliveryInput } : {}),
+        };
+      }
+
+      const result = await updateOrderStatus(orderId, status, itemId, trackingDetails);
+      const updatedOrder = result.order;
+
+      if (updatedOrder?.id) {
+        setOrders((prev) => prev.map((entry) => (entry.id === updatedOrder.id ? updatedOrder : entry)));
+      } else {
+        await loadAll();
+      }
     } catch (err) {
       setError(err.message || 'Failed to update order status');
     } finally {
@@ -488,7 +532,7 @@ export default function SellerDashboard() {
                             className="rounded-md border border-slate-200 px-2 py-1 text-xs"
                           >
                             {ORDER_STATUSES.map((status) => (
-                              <option key={status} value={status}>
+                              <option key={status} value={status} disabled={!isStatusSelectable(item.status, status)}>
                                 {status}
                               </option>
                             ))}
@@ -496,6 +540,20 @@ export default function SellerDashboard() {
                         </div>
                       ))}
                     </div>
+
+                    {order.trackingDetails?.trackingNumber || order.trackingDetails?.trackingUrl || order.trackingDetails?.estimatedDelivery ? (
+                      <div className="mt-3 rounded-lg border border-blue-100 bg-blue-50 p-3 text-xs text-blue-900">
+                        <p className="font-semibold">Shipping Details</p>
+                        <p>Tracking: {order.trackingDetails.trackingNumber || 'Not provided'}</p>
+                        <p>Carrier: {order.trackingDetails.carrier || 'Not provided'}</p>
+                        <p>
+                          ETA:{' '}
+                          {order.trackingDetails.estimatedDelivery
+                            ? new Date(order.trackingDetails.estimatedDelivery).toLocaleDateString()
+                            : 'Not provided'}
+                        </p>
+                      </div>
+                    ) : null}
                   </article>
                 ))}
               </div>

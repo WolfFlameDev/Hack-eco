@@ -24,14 +24,14 @@ export async function getOrders(view) {
   return parseResponse(response);
 }
 
-export async function updateOrderStatus(orderId, status, itemId) {
+export async function updateOrderStatus(orderId, status, itemId, trackingDetails) {
   const response = await fetch(`/api/orders/${orderId}`, {
     method: 'PATCH',
     headers: {
       'Content-Type': 'application/json',
     },
     credentials: 'include',
-    body: JSON.stringify({ status, itemId }),
+    body: JSON.stringify({ status, itemId, trackingDetails }),
   });
 
   return parseResponse(response);

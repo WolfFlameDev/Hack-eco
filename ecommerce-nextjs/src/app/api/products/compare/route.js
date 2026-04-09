@@ -17,6 +17,7 @@ const mapProduct = (product) => ({
   image: product.images?.[0] ?? '',
   stock: product.stock,
   rating: product.rating ?? 0,
+  tags: product.tags ?? [],
   sellerId: String(product.seller?._id ?? product.seller),
   seller: product.seller?._id
     ? { id: String(product.seller._id), name: product.seller.name }

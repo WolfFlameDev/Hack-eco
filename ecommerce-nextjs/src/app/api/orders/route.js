@@ -30,6 +30,7 @@ const mapOrder = (order, currentUser) => {
 
   return {
     id: String(order._id),
+    orderId: String(order._id),
     userId: String(order.user?._id ?? order.user),
     user: order.user?._id
       ? {
@@ -45,7 +46,10 @@ const mapOrder = (order, currentUser) => {
     shippingFee: order.shippingFee,
     totalAmount: order.totalAmount,
     shippingAddress: order.shippingAddress,
+    trackingDetails: order.trackingDetails ?? {},
+    statusTimeline: order.statusTimeline ?? {},
     createdAt: order.createdAt,
+    updatedAt: order.updatedAt,
     paymentDetails: order.paymentDetails,
   };
 };
@@ -83,9 +87,6 @@ export async function GET(request) {
 
 export async function POST(request) {
   const auth = await requireAuth(request);
-    sendOrderConfirmationEmail(populatedOrder, auth.user).catch((e) =>
-      console.error('Order confirmation email error:', e.message)
-    );
   if (auth.error) {
     return auth.error;
   }
@@ -152,7 +153,14 @@ export async function POST(request) {
   }
 
   order.paymentStatus = 'paid';
-  order.status = 'pending';
+  order.status = 'confirmed';
+  order.items.forEach((item) => {
+    item.status = 'confirmed';
+  });
+  order.statusTimeline = {
+    ...(order.statusTimeline || {}),
+    confirmedAt: order.statusTimeline?.confirmedAt || new Date(),
+  };
   order.paymentDetails = {
     ...order.paymentDetails,
       ...(isCOD
@@ -169,6 +177,9 @@ export async function POST(request) {
   await Cart.findOneAndUpdate({ user: auth.user._id }, { $set: { items: [] } });
 
   const populatedOrder = await Order.findById(order._id).populate('user', 'name email role');
+  sendOrderConfirmationEmail(populatedOrder, auth.user).catch((e) =>
+    console.error('Order confirmation email error:', e.message)
+  );
   return NextResponse.json({
     success: true,
     message: 'Order placed successfully.',
