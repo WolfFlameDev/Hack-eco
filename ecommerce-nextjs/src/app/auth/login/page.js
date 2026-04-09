@@ -106,7 +106,7 @@ export default function LoginPage() {
         </div>
 
         <ButtonLoader loading={loading} type="submit">
-          Sign in
+          Log in
         </ButtonLoader>
 
         {/* Social Login UI */}

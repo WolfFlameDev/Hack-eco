@@ -6,6 +6,7 @@ const initialState = {
   loading: false,
   error: null,
   isAuthenticated: false,
+  initialized: false,
 };
 
 const authSlice = createSlice({
@@ -23,11 +24,13 @@ const authSlice = createSlice({
       state.loading = false;
       state.isAuthenticated = true;
       state.error = null;
+      state.initialized = true;
     },
     loginFailure: (state, action) => {
       state.loading = false;
       state.error = action.payload;
       state.isAuthenticated = false;
+      state.initialized = true;
     },
 
     // Register actions
@@ -37,15 +40,17 @@ const authSlice = createSlice({
     },
     registerSuccess: (state, action) => {
       state.user = action.payload.user;
-      state.token = action.payload.token || 'cookie';
       state.loading = false;
-      state.isAuthenticated = true;
       state.error = null;
+      state.isAuthenticated = false;
+      state.token = null;
+      state.initialized = true;
     },
     registerFailure: (state, action) => {
       state.loading = false;
       state.error = action.payload;
       state.isAuthenticated = false;
+      state.initialized = true;
     },
 
     // Verify email actions
@@ -100,6 +105,7 @@ const authSlice = createSlice({
       state.loading = false;
       state.isAuthenticated = false;
       state.error = null;
+      state.initialized = true;
     },
 
     // Update user
@@ -117,6 +123,10 @@ const authSlice = createSlice({
       state.user = action.payload.user;
       state.token = action.payload.token || 'cookie';
       state.isAuthenticated = true;
+      state.initialized = true;
+    },
+    authInitialized: (state) => {
+      state.initialized = true;
     },
   },
 });
@@ -141,6 +151,7 @@ export const {
   updateUser,
   clearError,
   initializeAuth,
+  authInitialized,
 } = authSlice.actions;
 
 export default authSlice.reducer;

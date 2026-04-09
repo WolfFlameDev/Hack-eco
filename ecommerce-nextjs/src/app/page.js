@@ -1,36 +1,51 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { useDispatch } from 'react-redux';
+import { useDispatch, useSelector } from 'react-redux';
+import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import Navbar from '@/components/ecommerce/Navbar';
 import CategoryBar from '@/components/ecommerce/CategoryBar';
 import OfferSection from '@/components/ecommerce/OfferSection';
 import ProductCard from '@/components/ProductCard';
 import LoadingSkeleton from '@/components/ecommerce/LoadingSkeleton';
 import { useCart } from '@/hooks/useCart';
-import { addToCart } from '@/redux/slices/cartSlice';
+import { setCart } from '@/redux/slices/cartSlice';
+import { clearCompare, removeFromCompare } from '@/redux/slices/compareSlice';
 import { getProducts } from '@/services/productService';
+import { addToCart as addToCartRequest } from '@/services/cartService';
+import { useAuth } from '@/hooks/useAuth';
 import Offer from './main/offer';
 import Footer from './main/footer';
-const categories = ['All', 'Clothes', 'Accessories', 'Electronics', 'Shoes'];
 
 export default function HomePage() {
+  const router = useRouter();
   const dispatch = useDispatch();
   const { items: cartItems } = useCart();
+  const { isAuthenticated, user } = useAuth();
+  const compareItems = useSelector((state) => state.compare.items);
   const [products, setProducts] = useState([]);
+  const [categories, setCategories] = useState(['All']);
   const [activeCategory, setActiveCategory] = useState('All');
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
   const [toastMessage, setToastMessage] = useState('');
+  const [isAdding, setIsAdding] = useState(false);
 
   useEffect(() => {
     let active = true;
 
     async function loadProducts() {
-      const data = await getProducts();
-      if (!active) return;
-      setProducts(data);
-      setLoading(false);
+      try {
+        const data = await getProducts();
+        if (!active) return;
+        setProducts(data.products ?? []);
+        setCategories(['All', ...(data.categories ?? [])]);
+      } finally {
+        if (active) {
+          setLoading(false);
+        }
+      }
     }
 
     loadProducts();
@@ -45,26 +60,48 @@ export default function HomePage() {
       const matchesCategory = activeCategory === 'All' || product.category === activeCategory;
       const matchesSearch =
         query.length === 0 ||
-        product.name.toLowerCase().includes(query) ||
+        product.title.toLowerCase().includes(query) ||
         product.category.toLowerCase().includes(query) ||
         product.description.toLowerCase().includes(query);
       return matchesCategory && matchesSearch;
     });
   }, [activeCategory, products, searchTerm]);
 
-  const handleAddToCart = (product) => {
-    dispatch(addToCart(product));
-    setToastMessage(`${product.name} added to cart`);
-    setTimeout(() => setToastMessage(''), 2200);
+  const handleAddToCart = async (product) => {
+    if (!isAuthenticated) {
+      router.push('/auth/login');
+      return;
+    }
+
+    if (user?.role !== 'user') {
+      setToastMessage('Seller accounts cannot buy products.');
+      setTimeout(() => setToastMessage(''), 2200);
+      return;
+    }
+
+    try {
+      setIsAdding(true);
+      const cart = await addToCartRequest(product.id, 1);
+      dispatch(setCart(cart.items ?? []));
+      setToastMessage(`${product.title} added to cart`);
+    } catch (error) {
+      setToastMessage(error.message || 'Failed to add product to cart');
+    } finally {
+      setIsAdding(false);
+      setTimeout(() => setToastMessage(''), 2200);
+    }
   };
 
   const cartQuantity = cartItems.reduce((total, item) => total + item.quantity, 0);
+
+  // Whether compare bar should be visible
+  const showCompareBar = compareItems.length > 0;
 
   return (
     <div className="min-h-screen bg-[#f8fafb] text-slate-900">
       <Navbar cartCount={cartQuantity} searchTerm={searchTerm} onSearch={setSearchTerm} />
 <Offer/>
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-20">
+      <main className="max-w-7xl mx-auto px-4 pt-24 sm:px-6 lg:px-8 pb-20">
         <section className="pt-10">
           <div className="rounded-4xl border border-slate-200 bg-white p-8 shadow-[0_30px_80px_-40px_rgba(15,23,42,0.2)] sm:p-10">
             <div className="grid gap-8 lg:grid-cols-[1.2fr_0.8fr] lg:items-center">
@@ -149,9 +186,58 @@ export default function HomePage() {
     <Footer/>
       {toastMessage && (
         <div className="fixed bottom-6 left-1/2 z-50 w-[calc(100%-2rem)] max-w-md -translate-x-1/2 rounded-3xl bg-slate-900 px-6 py-4 text-center text-sm font-semibold text-white shadow-2xl shadow-slate-900/20 sm:w-auto">
-          {toastMessage}
+          {isAdding ? 'Adding to cart...' : toastMessage}
         </div>
       )}
+
+      <CompareBar
+        items={compareItems}
+        onRemove={(id) => dispatch(removeFromCompare(id))}
+        onClear={() => dispatch(clearCompare())}
+      />
+    </div>
+  );
+}
+// ── Floating Compare Bar ─────────────────────────────────────────────────────
+function CompareBar({ items, onRemove, onClear }) {
+  if (!items.length) return null;
+  return (
+    <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-slate-200 bg-white shadow-2xl shadow-slate-900/10">
+      <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 px-4 py-3 sm:px-6">
+        <div className="flex flex-wrap items-center gap-3">
+          <span className="text-sm font-black text-slate-700">
+            Compare ({items.length}/4):
+          </span>
+          {items.map((p) => (
+            <span
+              key={p.id}
+              className="flex items-center gap-2 rounded-full border border-green-200 bg-green-50 px-3 py-1 text-xs font-semibold text-green-800"
+            >
+              {p.title?.slice(0, 20)}{p.title?.length > 20 ? '…' : ''}
+              <button
+                onClick={() => onRemove(p.id)}
+                className="text-green-600 hover:text-red-500"
+              >
+                ✕
+              </button>
+            </span>
+          ))}
+        </div>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={onClear}
+            className="rounded-xl border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50"
+          >
+            Clear
+          </button>
+          <Link
+            href="/compare"
+            className="rounded-xl bg-green-600 px-5 py-2 text-xs font-bold text-white shadow-md shadow-green-100 hover:bg-green-700"
+          >
+            Compare Now →
+          </Link>
+        </div>
+      </div>
     </div>
   );
 }

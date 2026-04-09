@@ -133,3 +133,62 @@ export const sendOTPEmail = async (email, otp, { purpose = 'verification' } = {}
     html
   );
 };
+
+export const sendOrderConfirmationEmail = async (order, user) => {
+  const itemRows = (order.items ?? [])
+    .map(
+      (item) =>
+        `<tr>
+          <td style="padding:8px 12px;border-bottom:1px solid #f1f5f9">${item.title}</td>
+          <td style="padding:8px 12px;border-bottom:1px solid #f1f5f9;text-align:center">${item.quantity}</td>
+          <td style="padding:8px 12px;border-bottom:1px solid #f1f5f9;text-align:right">&#8377;${(item.price * item.quantity).toFixed(2)}</td>
+        </tr>`
+    )
+    .join('');
+
+  const html = `
+    <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;background:#f8fafb;padding:24px;border-radius:16px">
+      <div style="background:#16a34a;padding:24px;border-radius:12px;text-align:center;margin-bottom:24px">
+        <h1 style="color:#fff;margin:0;font-size:22px">&#10003; Order Confirmed!</h1>
+        <p style="color:#dcfce7;margin:8px 0 0">Thank you for shopping with EcoCommerce</p>
+      </div>
+      <p style="color:#1e293b">Hi <strong>${user.name}</strong>,</p>
+      <p style="color:#475569">Your order <strong>#${String(order._id).slice(-8).toUpperCase()}</strong> has been placed successfully.</p>
+      <table style="width:100%;border-collapse:collapse;margin:16px 0;background:#fff;border-radius:12px;overflow:hidden">
+        <thead>
+          <tr style="background:#f1f5f9">
+            <th style="padding:10px 12px;text-align:left;font-size:12px;color:#64748b">ITEM</th>
+            <th style="padding:10px 12px;text-align:center;font-size:12px;color:#64748b">QTY</th>
+            <th style="padding:10px 12px;text-align:right;font-size:12px;color:#64748b">TOTAL</th>
+          </tr>
+        </thead>
+        <tbody>${itemRows}</tbody>
+      </table>
+      <table style="width:100%;margin-top:8px">
+        <tr><td style="color:#64748b">Subtotal</td><td style="text-align:right">&#8377;${order.subtotal?.toFixed(2)}</td></tr>
+        <tr><td style="color:#64748b">Shipping</td><td style="text-align:right">${order.shippingFee === 0 ? 'Free' : '&#8377;' + order.shippingFee?.toFixed(2)}</td></tr>
+        <tr><td style="font-weight:bold;color:#1e293b;padding-top:8px">Total</td><td style="font-weight:bold;color:#16a34a;text-align:right;padding-top:8px">&#8377;${order.totalAmount?.toFixed(2)}</td></tr>
+      </table>
+      <p style="color:#94a3b8;font-size:12px;margin-top:24px">Payment: ${order.paymentDetails?.mode === 'cod' ? 'Cash on Delivery' : 'Online Payment'}</p>
+      <p style="color:#94a3b8;font-size:12px">EcoCommerce &mdash; Sustainable shopping, delivered.</p>
+    </div>`;
+
+  return await sendEmail(user.email, `Order Confirmed #${String(order._id).slice(-8).toUpperCase()} — EcoCommerce`, html);
+};
+
+export const sendOrderStatusEmail = async (order, user, newStatus) => {
+  const statusLabels = { pending: 'Processing', shipped: 'Shipped', delivered: 'Delivered' };
+  const label = statusLabels[newStatus] ?? newStatus;
+
+  const html = `
+    <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;background:#f8fafb;padding:24px;border-radius:16px">
+      <h2 style="color:#1e293b">Order Update — EcoCommerce</h2>
+      <p style="color:#475569">Hi <strong>${user.name}</strong>, your order <strong>#${String(order._id).slice(-8).toUpperCase()}</strong> status has been updated.</p>
+      <div style="background:#dcfce7;border-left:4px solid #16a34a;padding:16px;border-radius:8px;margin:16px 0">
+        <p style="margin:0;color:#15803d;font-size:18px;font-weight:bold">${label}</p>
+      </div>
+      <p style="color:#94a3b8;font-size:12px">EcoCommerce &mdash; Thank you for shopping with us.</p>
+    </div>`;
+
+  return await sendEmail(user.email, `Order ${label} #${String(order._id).slice(-8).toUpperCase()} — EcoCommerce`, html);
+};

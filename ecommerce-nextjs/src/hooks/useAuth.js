@@ -2,6 +2,7 @@ import { useSelector, useDispatch } from "react-redux";
 import { useEffect } from "react";
 import authService from "@/services/authService";
 import {
+  authInitialized,
   loginStart,
   loginSuccess,
   loginFailure,
@@ -30,26 +31,34 @@ export const useAuth = () => {
     loading,
     error,
     isAuthenticated,
+    initialized,
   } = useSelector((state) => state.auth);
 
   // Initialize auth on app start using cookie-based session
   useEffect(() => {
+    if (initialized) {
+      return;
+    }
+
     const initializeAuthState = async () => {
       try {
         const response = await authService.fetchMe();
-        if (response.success && response.data?.user) {
+        if (response?.user) {
           dispatch(initializeAuth({
-            user: response.data.user,
+            user: response.user,
             token: 'cookie',
           }));
+          return;
         }
       } catch (error) {
         // No session or invalid token; leave auth state empty.
+      } finally {
+        dispatch(authInitialized());
       }
     };
 
     initializeAuthState();
-  }, [dispatch]);
+  }, [dispatch, initialized]);
 
   const login = async (credentials) => {
     try {
@@ -58,7 +67,7 @@ export const useAuth = () => {
       dispatch(loginSuccess(response));
       return response;
     } catch (error) {
-      dispatch(loginFailure(error.error || 'Login failed'));
+      dispatch(loginFailure(error.message || error.error || 'Login failed'));
       throw error;
     }
   };
@@ -70,7 +79,7 @@ export const useAuth = () => {
       dispatch(registerSuccess(response));
       return response;
     } catch (error) {
-      dispatch(registerFailure(error.error || 'Registration failed'));
+      dispatch(registerFailure(error.message || error.error || 'Registration failed'));
       throw error;
     }
   };
@@ -82,7 +91,7 @@ export const useAuth = () => {
       dispatch(verifyEmailSuccess());
       return response;
     } catch (error) {
-      dispatch(verifyEmailFailure(error.error || 'Email verification failed'));
+      dispatch(verifyEmailFailure(error.message || error.error || 'Email verification failed'));
       throw error;
     }
   };
@@ -94,7 +103,7 @@ export const useAuth = () => {
       dispatch(forgotPasswordSuccess());
       return response;
     } catch (error) {
-      dispatch(forgotPasswordFailure(error.error || 'Failed to send reset email'));
+      dispatch(forgotPasswordFailure(error.message || error.error || 'Failed to send reset email'));
       throw error;
     }
   };
@@ -106,13 +115,13 @@ export const useAuth = () => {
       dispatch(resetPasswordSuccess());
       return response;
     } catch (error) {
-      dispatch(resetPasswordFailure(error.error || 'Password reset failed'));
+      dispatch(resetPasswordFailure(error.message || error.error || 'Password reset failed'));
       throw error;
     }
   };
 
-  const logout = () => {
-    authService.logout();
+  const logout = async () => {
+    await authService.logout();
     dispatch(logoutAction());
   };
 
@@ -136,6 +145,7 @@ export const useAuth = () => {
     loading,
     error,
     isAuthenticated,
+    initialized,
 
     // Actions
     login,

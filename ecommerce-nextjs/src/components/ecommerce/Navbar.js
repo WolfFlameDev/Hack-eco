@@ -1,27 +1,22 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ShoppingCart, UserCircle, SearchIcon, Menu, LogOut, User, Package, X } from 'lucide-react';
+import { ShoppingCart, UserCircle, SearchIcon, Menu, LogOut, User, X } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useDispatch } from 'react-redux';
 import { logout } from '@/redux/slices/authSlice';
 import authService from '@/services/authService';
 
 export default function Navbar({ cartCount = 0, searchTerm, onSearch }) {
-  const [isMounted, setIsMounted] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const { isAuthenticated, user, loading } = useAuth();
   const router = useRouter();
   const dispatch = useDispatch();
-
-  useEffect(() => {
-    setIsMounted(true);
-  }, []);
-
-  const showCartCount = isMounted && cartCount > 0;
+  const canUseCart = !user || user.role === 'user';
+  const showCartCount = cartCount > 0;
 
   const handleLogout = async () => {
     try {
@@ -41,7 +36,7 @@ export default function Navbar({ cartCount = 0, searchTerm, onSearch }) {
   };
 
   return (
-    <header className="sticky top-0 z-50 w-full border-b border-slate-100 bg-white/95 backdrop-blur-md shadow-sm">
+    <header className="fixed top-0 z-50 w-full border-b border-slate-100 bg-white/95 backdrop-blur-md shadow-sm">
       <div className="mx-auto flex h-20 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
         
         {/* LEFT: Logo & Nav Links */}
@@ -76,8 +71,8 @@ export default function Navbar({ cartCount = 0, searchTerm, onSearch }) {
             <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
             <input
               type="text"
-              value={searchTerm}
-              onChange={(e) => onSearch(e.target.value)}
+              value={searchTerm ?? ''}
+              onChange={(e) => onSearch?.(e.target.value)}
               placeholder="Search products..."
               className="h-10 w-full rounded-lg border border-slate-200 bg-slate-50 pl-10 pr-4 text-sm outline-none transition-all focus:border-green-500 focus:bg-white focus:ring-4 focus:ring-green-50"
             />
@@ -87,21 +82,23 @@ export default function Navbar({ cartCount = 0, searchTerm, onSearch }) {
         {/* RIGHT: Actions */}
         <div className="flex items-center gap-2 sm:gap-4">
           {/* Cart Button */}
-          <Link
-            href="/user/cart"
-            className="group relative flex h-10 w-10 items-center justify-center rounded-full text-slate-600 hover:bg-slate-100 transition-colors"
-            title="Shopping Cart"
-          >
-            <ShoppingCart size={22} className="group-hover:text-green-600" />
-            {showCartCount && (
-              <span className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-green-600 text-[11px] font-bold text-white">
-                {cartCount}
-              </span>
-            )}
-          </Link>
+          {canUseCart && (
+            <Link
+              href="/user/cart"
+              className="group relative flex h-10 w-10 items-center justify-center rounded-full text-slate-600 hover:bg-slate-100 transition-colors"
+              title="Shopping Cart"
+            >
+              <ShoppingCart size={22} className="group-hover:text-green-600" />
+              {showCartCount && (
+                <span className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-green-600 text-[11px] font-bold text-white">
+                  {cartCount}
+                </span>
+              )}
+            </Link>
+          )}
 
           {/* Auth Section */}
-          {(!isMounted || loading) ? (
+          {loading ? (
             <div className="flex items-center gap-2">
               <div className="h-10 w-10 rounded-full bg-slate-200 animate-pulse" />
             </div>
@@ -135,14 +132,6 @@ export default function Navbar({ cartCount = 0, searchTerm, onSearch }) {
                       <User size={16} className="text-green-600" />
                       Dashboard
                     </button>
-                    <Link
-                      href="/user/profile"
-                      className="flex items-center gap-3 px-4 py-3 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
-                      onClick={() => setShowDropdown(false)}
-                    >
-                      <User size={16} className="text-green-600" />
-                      My Profile
-                    </Link>
                   </div>
 
                   <div className="border-t border-slate-100 py-1">

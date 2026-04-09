@@ -1,6 +1,8 @@
 import axios from 'axios';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || '';
+const TOKEN_STORAGE_KEY = 'ecoCommerceToken';
+const USER_STORAGE_KEY = 'ecoCommerceUser';
 
 class AuthService {
   constructor() {
@@ -23,31 +25,101 @@ class AuthService {
     );
   }
 
+  getToken() {
+    if (typeof window === 'undefined') {
+      return null;
+    }
+
+    return window.localStorage.getItem(TOKEN_STORAGE_KEY);
+  }
+
+  setToken(token) {
+    if (typeof window === 'undefined' || !token) {
+      return;
+    }
+
+    window.localStorage.setItem(TOKEN_STORAGE_KEY, token);
+  }
+
+  removeToken() {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    window.localStorage.removeItem(TOKEN_STORAGE_KEY);
+  }
+
+  getUser() {
+    if (typeof window === 'undefined') {
+      return null;
+    }
+
+    const user = window.localStorage.getItem(USER_STORAGE_KEY);
+
+    if (!user) {
+      return null;
+    }
+
+    try {
+      return JSON.parse(user);
+    } catch {
+      this.removeUser();
+      return null;
+    }
+  }
+
+  setUser(user) {
+    if (typeof window === 'undefined' || !user) {
+      return;
+    }
+
+    window.localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(user));
+  }
+
+  removeUser() {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    window.localStorage.removeItem(USER_STORAGE_KEY);
+  }
+
   // Auth methods
   async login(credentials) {
     try {
       const response = await this.api.post('/api/auth/login', credentials);
-      return response.data;
+      const payload = response.data?.data ?? {};
+
+      this.setToken(payload.token);
+      this.setUser(payload.user);
+
+      return payload;
     } catch (error) {
-      throw error.response?.data || error;
+      throw error.response?.data || { message: error.message || 'Login failed' };
     }
   }
 
   async register(userData) {
     try {
       const response = await this.api.post('/api/auth/register', userData);
-      return response.data;
+      return response.data?.data ?? {};
     } catch (error) {
-      throw error.response?.data || error;
+      throw error.response?.data || { message: error.message || 'Registration failed' };
     }
   }
 
   async fetchMe() {
     try {
       const response = await this.api.get('/api/auth/me');
-      return response.data;
+      const payload = response.data?.data ?? {};
+
+      if (payload.user) {
+        this.setUser(payload.user);
+      }
+
+      return payload;
     } catch (error) {
-      throw error.response?.data || error;
+      throw error.response?.data || { message: error.message || 'Failed to load session' };
     }
   }
 
@@ -56,6 +128,9 @@ class AuthService {
       await this.api.post('/api/auth/logout');
     } catch (error) {
       console.error('Logout API error:', error);
+    } finally {
+      this.removeToken();
+      this.removeUser();
     }
   }
 
@@ -67,18 +142,18 @@ class AuthService {
         currentUser.isVerified = true;
         this.setUser(currentUser);
       }
-      return response.data;
+      return response.data?.data ?? {};
     } catch (error) {
-      throw error.response?.data || error;
+      throw error.response?.data || { message: error.message || 'Verification failed' };
     }
   }
 
   async forgotPassword(email) {
     try {
       const response = await this.api.post('/api/auth/forgot-password', { email });
-      return response.data;
+      return response.data?.data ?? {};
     } catch (error) {
-      throw error.response?.data || error;
+      throw error.response?.data || { message: error.message || 'Failed to send reset OTP' };
     }
   }
 
@@ -89,15 +164,10 @@ class AuthService {
         otp,
         password,
       });
-      return response.data;
+      return response.data?.data ?? {};
     } catch (error) {
-      throw error.response?.data || error;
+      throw error.response?.data || { message: error.message || 'Password reset failed' };
     }
-  }
-
-  logout() {
-    this.removeToken();
-    this.removeUser();
   }
 
   isAuthenticated() {

@@ -1,132 +1,202 @@
 'use client';
 
-import { useAuth } from '@/hooks/useAuth';
-import { useRouter } from 'next/navigation';
-import { useEffect } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { useAuth } from '@/hooks/useAuth';
+import Navbar from '@/components/ecommerce/Navbar';
+import { getOrders } from '@/services/orderService';
 
 export default function UserDashboard() {
-  const { user, isAuthenticated, logout, isUser } = useAuth();
   const router = useRouter();
+  const { initialized, isAuthenticated, user, logout } = useAuth();
+  const [orders, setOrders] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
-  if (!isAuthenticated) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
-      </div>
+  useEffect(() => {
+    if (!initialized) {
+      return;
+    }
+
+    if (!isAuthenticated) {
+      router.replace('/auth/login?redirect=/user/dashboard');
+      return;
+    }
+
+    if (user?.role !== 'user') {
+      router.replace(user?.role === 'seller' ? '/seller/dashboard' : '/admin/dashboard');
+    }
+  }, [initialized, isAuthenticated, router, user?.role]);
+
+  useEffect(() => {
+    let active = true;
+
+    async function loadOrders() {
+      try {
+        setLoading(true);
+        setError('');
+        const data = await getOrders('user');
+        if (!active) {
+          return;
+        }
+
+        setOrders(data.orders ?? []);
+      } catch (err) {
+        if (!active) {
+          return;
+        }
+
+        setError(err.message || 'Failed to fetch orders');
+      } finally {
+        if (active) {
+          setLoading(false);
+        }
+      }
+    }
+
+    if (isAuthenticated && user?.role === 'user') {
+      loadOrders();
+    }
+
+    return () => {
+      active = false;
+    };
+  }, [isAuthenticated, user?.role]);
+
+  const summary = useMemo(() => {
+    return orders.reduce(
+      (acc, order) => {
+        acc.total += order.totalAmount || 0;
+        if (order.status === 'delivered') {
+          acc.delivered += 1;
+        }
+        if (order.status === 'pending') {
+          acc.pending += 1;
+        }
+        return acc;
+      },
+      { total: 0, delivered: 0, pending: 0 }
     );
-  }
+  }, [orders]);
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-white shadow">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center py-4">
-            <div className="flex items-center">
-              <h1 className="text-2xl font-bold text-gray-900">EcoCommerce</h1>
-            </div>
-            <div className="flex items-center space-x-4">
-              <span className="text-gray-700">Welcome, {user.name}</span>
-              <button
-                onClick={logout}
-                className="bg-red-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-red-700"
-              >
-                Logout
-              </button>
-            </div>
+    <div className="min-h-screen bg-slate-50">
+      <Navbar searchTerm="" onSearch={() => {}} cartCount={0} />
+
+      <main className="mx-auto max-w-7xl px-4 pb-16 pt-28 sm:px-6 lg:px-8">
+        <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-black text-slate-900">My Dashboard</h1>
+            <p className="mt-1 text-sm text-slate-600">Track your orders and recent purchases.</p>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <Link
+              href="/profile/edit"
+              className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700"
+            >
+              Edit Profile
+            </Link>
+            <Link
+              href="/"
+              className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700"
+            >
+              Continue Shopping
+            </Link>
+            <button
+              onClick={logout}
+              className="rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white"
+            >
+              Logout
+            </button>
           </div>
         </div>
-      </header>
 
-      {/* Main Content */}
-      <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
-        <div className="px-4 py-6 sm:px-0">
-          <div className="border-4 border-dashed border-gray-200 rounded-lg p-8">
-            <div className="text-center">
-              <h2 className="text-2xl font-semibold text-gray-900 mb-4">
-                Welcome to Your Dashboard
-              </h2>
-              <p className="text-gray-600 mb-6">
-                Your eco-friendly shopping journey starts here!
-              </p>
+        <section className="mb-8 grid gap-4 md:grid-cols-3">
+          <StatCard label="Total Orders" value={orders.length} />
+          <StatCard label="Delivered" value={summary.delivered} />
+          <StatCard label="Total Spent" value={`Rs ${summary.total.toFixed(2)}`} />
+        </section>
 
-              {/* Quick Actions */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-4xl mx-auto">
-                <div className="bg-white p-6 rounded-lg shadow-md">
-                  <div className="text-center">
-                    <div className="bg-green-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
-                      <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
-                      </svg>
-                    </div>
-                    <h3 className="text-lg font-semibold text-gray-900 mb-2">Browse Products</h3>
-                    <p className="text-gray-600 text-sm mb-4">Discover sustainable products from our trusted sellers.</p>
-                    <button className="bg-green-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-green-700">
-                      Shop Now
-                    </button>
-                  </div>
-                </div>
+        <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+          <h2 className="text-xl font-black text-slate-900">My Orders</h2>
 
-                <div className="bg-white p-6 rounded-lg shadow-md">
-                  <div className="text-center">
-                    <div className="bg-blue-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
-                      <svg className="w-8 h-8 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                      </svg>
-                    </div>
-                    <h3 className="text-lg font-semibold text-gray-900 mb-2">My Orders</h3>
-                    <p className="text-gray-600 text-sm mb-4">View your order history and track current orders.</p>
-                    <button className="bg-blue-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-blue-700">
-                      View Orders
-                    </button>
-                  </div>
-                </div>
+          {loading ? <p className="mt-4 text-sm text-slate-500">Loading orders...</p> : null}
+          {!loading && error ? <p className="mt-4 text-sm text-red-600">{error}</p> : null}
 
-                <div className="bg-white p-6 rounded-lg shadow-md">
-                  <div className="text-center">
-                    <div className="bg-purple-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
-                      <svg className="w-8 h-8 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                      </svg>
-                    </div>
-                    <h3 className="text-lg font-semibold text-gray-900 mb-2">My Profile</h3>
-                    <p className="text-gray-600 text-sm mb-4">Manage your account settings and preferences.</p>
-                    <button className="bg-purple-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-purple-700">
-                      Edit Profile
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              {/* User Info */}
-              <div className="mt-8 bg-white p-6 rounded-lg shadow-md max-w-md mx-auto">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Account Information</h3>
-                <div className="space-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Name:</span>
-                    <span className="font-medium">{user.name}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Email:</span>
-                    <span className="font-medium">{user.email}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Role:</span>
-                    <span className="font-medium capitalize">{user.role}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Status:</span>
-                    <span className={`font-medium ${user.isVerified ? 'text-green-600' : 'text-yellow-600'}`}>
-                      {user.isVerified ? 'Verified' : 'Pending Verification'}
-                    </span>
-                  </div>
-                </div>
-              </div>
+          {!loading && !error && orders.length === 0 ? (
+            <div className="mt-6 rounded-2xl border border-dashed border-slate-200 p-8 text-center">
+              <p className="text-slate-600">No orders yet. Start shopping to place your first order.</p>
             </div>
-          </div>
-        </div>
+          ) : null}
+
+          {!loading && !error && orders.length > 0 ? (
+            <div className="mt-6 space-y-4">
+              {orders.map((order) => (
+                <article key={order.id} className="rounded-2xl border border-slate-200 p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-sm font-semibold text-slate-900">Order #{order.id.slice(-8).toUpperCase()}</p>
+                    <p className="text-xs text-slate-500">{new Date(order.createdAt).toLocaleString()}</p>
+                  </div>
+
+                  <div className="mt-3 flex flex-wrap items-center gap-3 text-sm">
+                    <StatusBadge label={order.status} />
+                    <PaymentBadge label={order.paymentStatus} />
+                    <span className="font-semibold text-slate-900">Rs {(order.totalAmount ?? 0).toFixed(2)}</span>
+                  </div>
+
+                  <div className="mt-4 space-y-2">
+                    {(order.items ?? []).map((item) => (
+                      <div key={item.id} className="flex items-center justify-between text-sm">
+                        <span className="text-slate-700">{item.title} x {item.quantity}</span>
+                        <span className="font-medium text-slate-900">Rs {(item.price * item.quantity).toFixed(2)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </article>
+              ))}
+            </div>
+          ) : null}
+        </section>
       </main>
     </div>
+  );
+}
+
+function StatCard({ label, value }) {
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+      <p className="text-sm text-slate-500">{label}</p>
+      <p className="mt-2 text-2xl font-black text-slate-900">{value}</p>
+    </div>
+  );
+}
+
+function StatusBadge({ label }) {
+  const map = {
+    pending: 'bg-amber-100 text-amber-800',
+    shipped: 'bg-blue-100 text-blue-800',
+    delivered: 'bg-green-100 text-green-800',
+  };
+
+  return (
+    <span className={`rounded-full px-3 py-1 text-xs font-semibold ${map[label] ?? 'bg-slate-100 text-slate-700'}`}>
+      {label}
+    </span>
+  );
+}
+
+function PaymentBadge({ label }) {
+  const map = {
+    created: 'bg-slate-100 text-slate-700',
+    paid: 'bg-green-100 text-green-800',
+    failed: 'bg-red-100 text-red-800',
+  };
+
+  return (
+    <span className={`rounded-full px-3 py-1 text-xs font-semibold ${map[label] ?? 'bg-slate-100 text-slate-700'}`}>
+      payment: {label}
+    </span>
   );
 }

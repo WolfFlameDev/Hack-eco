@@ -1,40 +1,93 @@
 'use client';
 
 import Link from 'next/link';
-import { useDispatch } from 'react-redux';
 import { useCart } from '@/hooks/useCart';
-import { decrementQuantity, incrementQuantity, removeFromCart } from '@/redux/slices/cartSlice';
+import { useDispatch } from 'react-redux';
+import { setCart } from '@/redux/slices/cartSlice';
 import CartItem from '@/components/CartItem';
+import Navbar from '@/components/ecommerce/Navbar';
 import { ChevronLeft, ShoppingBag } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { toast } from 'sonner';
 import { useState, useEffect } from 'react';
+import { removeCartItem, updateCartItem } from '@/services/cartService';
+import { useAuth } from '@/hooks/useAuth';
+import { useRouter } from 'next/navigation';
 
 export default function CartPage() {
   const dispatch = useDispatch();
   const cart = useCart();
   const cartItems = cart?.items || [];
   const [isMounted, setIsMounted] = useState(false);
+  const [isUpdating, setIsUpdating] = useState(false);
+  const { initialized, isAuthenticated, user } = useAuth();
+  const router = useRouter();
 
   useEffect(() => {
     setIsMounted(true);
   }, []);
 
+  useEffect(() => {
+    if (!initialized) {
+      return;
+    }
+
+    if (!isAuthenticated) {
+      router.replace('/auth/login?redirect=/user/cart');
+      return;
+    }
+
+    if (user?.role !== 'user') {
+      router.replace(user?.role === 'seller' ? '/seller/dashboard' : '/admin/dashboard');
+    }
+  }, [initialized, isAuthenticated, router, user?.role]);
+
   const totalPrice = cartItems.reduce((total, item) => total + (item?.price || 0) * (item?.quantity || 0), 0);
 
+  const syncCart = async (id, quantity) => {
+    setIsUpdating(true);
+
+    try {
+      const data = await updateCartItem(id, quantity);
+      dispatch(setCart(data.items ?? []));
+      toast.success('Quantity updated');
+    } catch (error) {
+      toast.error(error.message || 'Unable to update cart');
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
   const handleIncrement = (id) => {
-    dispatch(incrementQuantity(id));
-    toast.success('Quantity updated');
+    const item = cartItems.find((entry) => entry.id === id);
+    if (!item) {
+      return;
+    }
+
+    syncCart(id, item.quantity + 1);
   };
 
   const handleDecrement = (id) => {
-    dispatch(decrementQuantity(id));
-    toast.success('Quantity updated');
+    const item = cartItems.find((entry) => entry.id === id);
+    if (!item || item.quantity <= 1) {
+      return;
+    }
+
+    syncCart(id, item.quantity - 1);
   };
 
-  const handleRemove = (id, title) => {
-    dispatch(removeFromCart(id));
-    toast.success(`${title} removed from cart`);
+  const handleRemove = async (id, title) => {
+    setIsUpdating(true);
+
+    try {
+      const data = await removeCartItem(id);
+      dispatch(setCart(data.items ?? []));
+      toast.success(`${title} removed from cart`);
+    } catch (error) {
+      toast.error(error.message || 'Unable to remove item');
+    } finally {
+      setIsUpdating(false);
+    }
   };
 
   const shippingCost = totalPrice > 1000 ? 0 : 50;
@@ -76,7 +129,8 @@ export default function CartPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white">
-      <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+      <Navbar cartCount={cart.cartCount} searchTerm="" onSearch={() => {}} />
+      <div className="mx-auto max-w-7xl px-4 py-8 pt-28 sm:px-6 lg:px-8">
         {/* Header */}
 <motion.div
   initial={{ opacity: 0, y: -30 }}
@@ -207,9 +261,10 @@ export default function CartPage() {
 
               <Link
                 href="/user/checkout"
+                aria-disabled={isUpdating}
                 className="mt-8 block w-full rounded-full bg-green-600 px-5 py-4 text-center text-sm font-bold uppercase tracking-[0.18em] text-white shadow-lg shadow-green-100 hover:bg-green-700 transition-all hover:shadow-xl hover:shadow-green-200"
               >
-                Proceed to Checkout
+                {isUpdating ? 'Updating Cart...' : 'Proceed to Checkout'}
               </Link>
 
               <p className="mt-4 text-center text-xs text-slate-500">Secure & encrypted checkout</p>
@@ -220,4 +275,3 @@ export default function CartPage() {
     </div>
   );
 }
-

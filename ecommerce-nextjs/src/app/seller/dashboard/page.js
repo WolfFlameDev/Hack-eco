@@ -1,264 +1,532 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { useAuth } from '@/hooks/useAuth';
+import { useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { 
-  LayoutDashboard, 
-  PlusCircle, 
-  Package, 
-  BarChart3, 
-  LogOut, 
-  Search, 
-  Edit, 
-  Trash2, 
-  ArrowUpRight,
-  TrendingUp,
-  DollarSign,
-  ShoppingCart
-} from 'lucide-react';
-import { 
-  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar 
-} from 'recharts';
+import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { useAuth } from '@/hooks/useAuth';
+import Navbar from '@/components/ecommerce/Navbar';
+import { PRODUCT_CATEGORIES } from '@/lib/catalog';
+import { createProduct, deleteProduct, getProducts, updateProduct } from '@/services/productService';
+import { getOrders, updateOrderStatus } from '@/services/orderService';
+import { uploadImages } from '@/services/profileService';
 
-// Mock Data for Charts
-const revenueData = [
-  { name: 'Jan', revenue: 4000, sales: 240 },
-  { name: 'Feb', revenue: 3000, sales: 198 },
-  { name: 'Mar', revenue: 2000, sales: 150 },
-  { name: 'Apr', revenue: 2780, sales: 210 },
-  { name: 'May', revenue: 1890, sales: 120 },
-  { name: 'Jun', revenue: 2390, sales: 170 },
-];
+const ORDER_STATUSES = ['pending', 'shipped', 'delivered'];
+
+const EMPTY_FORM = {
+  title: '',
+  description: '',
+  price: '',
+  category: PRODUCT_CATEGORIES[0],
+  stock: '',
+  images: [],
+};
 
 export default function SellerDashboard() {
-  const { user, isAuthenticated, logout, isSeller } = useAuth();
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState('overview');
+  const { initialized, isAuthenticated, user, logout } = useAuth();
 
-  if (!isAuthenticated) {
+  const [activeTab, setActiveTab] = useState('overview');
+  const [products, setProducts] = useState([]);
+  const [orders, setOrders] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [chartReady, setChartReady] = useState(false);
+  const [error, setError] = useState('');
+  const [form, setForm] = useState(EMPTY_FORM);
+  const [editingId, setEditingId] = useState('');
+
+  useEffect(() => {
+    if (!initialized) {
+      return;
+    }
+
+    if (!isAuthenticated) {
+      router.replace('/auth/login?redirect=/seller/dashboard');
+      return;
+    }
+
+    if (user?.role !== 'seller' && user?.role !== 'admin') {
+      router.replace('/user/dashboard');
+    }
+  }, [initialized, isAuthenticated, router, user?.role]);
+
+  const loadAll = async () => {
+    try {
+      setLoading(true);
+      setError('');
+
+      const [productData, orderData] = await Promise.all([
+        getProducts({ mine: true }),
+        getOrders('seller'),
+      ]);
+
+      setProducts(productData.products ?? []);
+      setOrders(orderData.orders ?? []);
+    } catch (err) {
+      setError(err.message || 'Failed to load seller dashboard data');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (isAuthenticated && (user?.role === 'seller' || user?.role === 'admin')) {
+      loadAll();
+    }
+  }, [isAuthenticated, user?.role]);
+
+  useEffect(() => {
+    setChartReady(true);
+  }, []);
+
+  const chartData = useMemo(() => {
+    const monthMap = new Map();
+
+    for (const order of orders) {
+      for (const item of order.items ?? []) {
+        if (String(item.sellerId) !== String(user?.id ?? user?._id)) {
+          continue;
+        }
+
+        const date = new Date(order.createdAt);
+        const key = `${date.getFullYear()}-${date.getMonth() + 1}`;
+        const label = date.toLocaleString('en-US', { month: 'short' });
+        const prev = monthMap.get(key) ?? { name: label, revenue: 0, sales: 0 };
+
+        prev.revenue += Number(item.price || 0) * Number(item.quantity || 0);
+        prev.sales += Number(item.quantity || 0);
+
+        monthMap.set(key, prev);
+      }
+    }
+
+    return Array.from(monthMap.values());
+  }, [orders, user?.id, user?._id]);
+
+  const stats = useMemo(() => {
+    const totalRevenue = orders.reduce((sum, order) => {
+      const sellerTotal = (order.items ?? []).reduce((acc, item) => {
+        if (String(item.sellerId) !== String(user?.id ?? user?._id)) {
+          return acc;
+        }
+        return acc + Number(item.price || 0) * Number(item.quantity || 0);
+      }, 0);
+
+      return sum + sellerTotal;
+    }, 0);
+
+    const shippedOrders = orders.filter((order) => order.status === 'shipped' || order.status === 'delivered').length;
+
+    return {
+      totalRevenue,
+      totalProducts: products.length,
+      totalOrders: orders.length,
+      shippedOrders,
+    };
+  }, [orders, products.length, user?.id, user?._id]);
+
+  const resetForm = () => {
+    setForm(EMPTY_FORM);
+    setEditingId('');
+  };
+
+  const submitProduct = async (event) => {
+    event.preventDefault();
+
+    try {
+      setSaving(true);
+      setError('');
+
+      const payload = {
+        title: form.title.trim(),
+        description: form.description.trim(),
+        price: Number(form.price),
+        category: form.category,
+        stock: Number(form.stock),
+        images: form.images.filter(Boolean),
+      };
+
+      if (!payload.title || !payload.description) {
+        throw new Error('Title and description are required.');
+      }
+
+      if (editingId) {
+        await updateProduct(editingId, payload);
+      } else {
+        await createProduct(payload);
+      }
+
+      await loadAll();
+      resetForm();
+      setActiveTab('inventory');
+    } catch (err) {
+      setError(err.message || 'Unable to save product');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const removeImage = (index) => {
+    setForm((prev) => ({ ...prev, images: prev.images.filter((_, i) => i !== index) }));
+  };
+
+  const onProductImagesPick = async (event) => {
+    const files = Array.from(event.target.files ?? []);
+    if (!files.length) {
+      return;
+    }
+
+    try {
+      setUploading(true);
+      setError('');
+      const response = await uploadImages(files, 'products');
+      const urls = (response.files ?? []).map((item) => item.url).filter(Boolean);
+      setForm((prev) => ({ ...prev, images: [...prev.images, ...urls] }));
+    } catch (err) {
+      setError(err.message || 'Failed to upload product images');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const onEdit = (product) => {
+    setEditingId(product.id);
+    setForm({
+      title: product.title || '',
+      description: product.description || '',
+      price: String(product.price ?? ''),
+      category: product.category || PRODUCT_CATEGORIES[0],
+      stock: String(product.stock ?? ''),
+      images: product.images ?? [],
+    });
+    setActiveTab('add');
+  };
+
+  const onDelete = async (id) => {
+    try {
+      setSaving(true);
+      await deleteProduct(id);
+      await loadAll();
+    } catch (err) {
+      setError(err.message || 'Unable to delete product');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const onStatusChange = async (orderId, itemId, status) => {
+    try {
+      setSaving(true);
+      await updateOrderStatus(orderId, status, itemId);
+      await loadAll();
+    } catch (err) {
+      setError(err.message || 'Failed to update order status');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (!initialized || !isAuthenticated) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-white">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-emerald-600"></div>
+      <div className="flex min-h-screen items-center justify-center bg-slate-50">
+        <div className="h-10 w-10 animate-spin rounded-full border-4 border-slate-300 border-t-green-600" />
       </div>
     );
   }
 
   return (
-    <div className="flex min-h-screen bg-slate-50 font-sans">
-      {/* --- SIDEBAR --- */}
-      <aside className="w-64 bg-white border-r border-slate-200 hidden md:flex flex-col">
-        <div className="p-6">
-          <h2 className="text-xl font-bold text-emerald-600 flex items-center gap-2">
-            <div className="w-8 h-8 bg-emerald-600 rounded-lg flex items-center justify-center text-white text-xs">EC</div>
-            EcoSeller
-          </h2>
-        </div>
-        
-        <nav className="flex-1 px-4 space-y-2 mt-4">
-          <SidebarItem icon={<LayoutDashboard size={20}/>} label="Overview" active={activeTab === 'overview'} onClick={() => setActiveTab('overview')} />
-          <SidebarItem icon={<PlusCircle size={20}/>} label="Add Product" active={activeTab === 'add'} onClick={() => setActiveTab('add')} />
-          <SidebarItem icon={<Package size={20}/>} label="My Inventory" active={activeTab === 'inventory'} onClick={() => setActiveTab('inventory')} />
-          <SidebarItem icon={<BarChart3 size={20}/>} label="Analytics" active={activeTab === 'analytics'} onClick={() => setActiveTab('analytics')} />
-        </nav>
+    <div className="min-h-screen bg-slate-50">
+      <Navbar searchTerm="" onSearch={() => {}} cartCount={0} />
 
-        <div className="p-4 border-t border-slate-100">
-          <button onClick={logout} className="flex items-center gap-3 w-full px-4 py-3 text-slate-600 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all">
-            <LogOut size={20} />
-            <span className="font-medium">Logout</span>
-          </button>
-        </div>
-      </aside>
-
-      {/* --- MAIN CONTENT --- */}
-      <main className="flex-1 overflow-y-auto">
-        {/* Top Navbar */}
-        <header className="bg-white/80 backdrop-blur-md sticky top-0 z-10 border-b border-slate-200 px-8 py-4 flex justify-between items-center">
-          <h1 className="text-xl font-semibold text-slate-800 capitalize">{activeTab}</h1>
-          <div className="flex items-center gap-4">
-            <div className="text-right hidden sm:block">
-              <p className="text-sm font-bold text-slate-900">{user?.name}</p>
-              <p className="text-xs text-slate-500">{user?.email}</p>
-            </div>
-            <div className="w-10 h-10 bg-emerald-100 text-emerald-700 rounded-full flex items-center justify-center font-bold">
-              {user?.name?.charAt(0)}
-            </div>
+      <main className="mx-auto max-w-7xl px-4 pb-16 pt-28 sm:px-6 lg:px-8">
+        <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-black text-slate-900">Seller Dashboard</h1>
+            <p className="mt-1 text-sm text-slate-600">Manage your products and orders in real time.</p>
           </div>
-        </header>
 
-        <div className="p-8 max-w-7xl mx-auto">
-          {activeTab === 'overview' && <OverviewView revenueData={revenueData} />}
-          {activeTab === 'add' && <AddProductForm onSuccess={() => setActiveTab('inventory')} />}
-          {activeTab === 'inventory' && <InventoryTable />}
+          <div className="flex items-center gap-3">
+            <Link
+              href="/profile/edit"
+              className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700"
+            >
+              Edit Profile
+            </Link>
+            <button onClick={logout} className="rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white">
+              Logout
+            </button>
+          </div>
         </div>
+
+        <div className="mb-6 flex flex-wrap gap-2">
+          {[
+            ['overview', 'Overview'],
+            ['add', editingId ? 'Edit Product' : 'Add Product'],
+            ['inventory', 'My Inventory'],
+            ['orders', 'Orders'],
+          ].map(([key, label]) => (
+            <button
+              key={key}
+              onClick={() => setActiveTab(key)}
+              className={`rounded-xl px-4 py-2 text-sm font-semibold ${activeTab === key ? 'bg-green-600 text-white' : 'bg-white text-slate-700 border border-slate-200'}`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {error ? <p className="mb-4 text-sm text-red-600">{error}</p> : null}
+
+        {activeTab === 'overview' ? (
+          <section className="space-y-6">
+            <div className="grid gap-4 md:grid-cols-4">
+              <Card title="Revenue" value={`Rs ${stats.totalRevenue.toFixed(2)}`} />
+              <Card title="Products" value={stats.totalProducts} />
+              <Card title="Orders" value={stats.totalOrders} />
+              <Card title="Shipped" value={stats.shippedOrders} />
+            </div>
+
+            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+              <h2 className="mb-3 text-lg font-black text-slate-900">Revenue Trend</h2>
+              <div className="h-72 w-full min-w-0">
+                {chartReady ? (
+                  <ResponsiveContainer width="100%" height={280} minWidth={320}>
+                    <AreaChart data={chartData}>
+                      <defs>
+                        <linearGradient id="revGradient" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#16a34a" stopOpacity={0.28} />
+                          <stop offset="95%" stopColor="#16a34a" stopOpacity={0.02} />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                      <XAxis dataKey="name" />
+                      <YAxis />
+                      <Tooltip />
+                      <Area type="monotone" dataKey="revenue" stroke="#16a34a" fill="url(#revGradient)" />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                ) : null}
+              </div>
+            </div>
+          </section>
+        ) : null}
+
+        {activeTab === 'add' ? (
+          <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+            <h2 className="mb-5 text-xl font-black text-slate-900">{editingId ? 'Update Product' : 'Add Product'}</h2>
+
+            <form onSubmit={submitProduct} className="grid gap-4 md:grid-cols-2">
+              <Input label="Title" value={form.title} onChange={(value) => setForm((prev) => ({ ...prev, title: value }))} />
+              <Input label="Price" type="number" value={form.price} onChange={(value) => setForm((prev) => ({ ...prev, price: value }))} />
+
+              <div>
+                <label className="mb-1 block text-sm font-semibold text-slate-700">Category</label>
+                <select
+                  value={form.category}
+                  onChange={(event) => setForm((prev) => ({ ...prev, category: event.target.value }))}
+                  className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
+                >
+                  {PRODUCT_CATEGORIES.map((category) => (
+                    <option key={category} value={category}>
+                      {category}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <Input
+                label="Stock"
+                type="number"
+                value={form.stock}
+                onChange={(value) => setForm((prev) => ({ ...prev, stock: value }))}
+              />
+
+              <div className="md:col-span-2">
+                <label className="mb-1 block text-sm font-semibold text-slate-700">Description</label>
+                <textarea
+                  value={form.description}
+                  onChange={(event) => setForm((prev) => ({ ...prev, description: event.target.value }))}
+                  placeholder="Describe your product"
+                  className="h-28 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400"
+                />
+              </div>
+
+              <div className="md:col-span-2">
+                <label className="mb-1 block text-sm font-semibold text-slate-700">Product Images</label>
+
+                {form.images.length > 0 ? (
+                  <div className="mb-3 grid grid-cols-3 gap-3 sm:grid-cols-4 md:grid-cols-5">
+                    {form.images.map((url, index) => (
+                      <div key={index} className="group relative overflow-hidden rounded-xl border border-slate-200">
+                        <img
+                          src={url}
+                          alt={`Product image ${index + 1}`}
+                          className="h-24 w-full object-cover"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => removeImage(index)}
+                          className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-red-600 text-white opacity-0 transition-opacity group-hover:opacity-100 text-xs font-bold"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="mb-3 text-xs text-slate-400">No images added yet.</p>
+                )}
+
+                <label className="flex cursor-pointer items-center gap-2 rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-3 text-sm text-slate-600 hover:border-green-400 hover:bg-green-50 transition-colors">
+                  <span className="text-green-600 font-semibold">+ Upload Images</span>
+                  <span className="text-slate-400">(multiple allowed, max 5 MB each)</span>
+                  <input
+                    type="file"
+                    multiple
+                    accept="image/*"
+                    onChange={onProductImagesPick}
+                    className="hidden"
+                  />
+                </label>
+                {uploading ? (
+                  <p className="mt-2 flex items-center gap-2 text-xs text-slate-500">
+                    <span className="h-3 w-3 animate-spin rounded-full border-2 border-slate-300 border-t-green-600" />
+                    Uploading images...
+                  </p>
+                ) : null}
+              </div>
+
+              <div className="md:col-span-2 flex gap-3">
+                <button type="submit" disabled={saving || uploading} className="rounded-xl bg-green-600 px-5 py-2 text-sm font-semibold text-white">
+                  {saving ? 'Saving...' : editingId ? 'Update Product' : 'Create Product'}
+                </button>
+                {editingId ? (
+                  <button
+                    type="button"
+                    onClick={resetForm}
+                    className="rounded-xl border border-slate-200 bg-white px-5 py-2 text-sm font-semibold text-slate-700"
+                  >
+                    Cancel Edit
+                  </button>
+                ) : null}
+              </div>
+            </form>
+          </section>
+        ) : null}
+
+        {activeTab === 'inventory' ? (
+          <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+            <h2 className="mb-5 text-xl font-black text-slate-900">My Products</h2>
+
+            {loading ? <p className="text-sm text-slate-500">Loading products...</p> : null}
+
+            {!loading && products.length === 0 ? (
+              <p className="text-sm text-slate-600">No products yet. Add your first product.</p>
+            ) : null}
+
+            {!loading && products.length > 0 ? (
+              <div className="space-y-3">
+                {products.map((product) => (
+                  <article key={product.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 p-3">
+                    <div>
+                      <p className="font-semibold text-slate-900">{product.title}</p>
+                      <p className="text-xs text-slate-500">{product.category} | Stock: {product.stock} | Rs {product.price}</p>
+                    </div>
+
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => onEdit(product)}
+                        className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        onClick={() => onDelete(product.id)}
+                        disabled={saving}
+                        className="rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            ) : null}
+          </section>
+        ) : null}
+
+        {activeTab === 'orders' ? (
+          <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+            <h2 className="mb-5 text-xl font-black text-slate-900">Orders For Your Products</h2>
+
+            {loading ? <p className="text-sm text-slate-500">Loading orders...</p> : null}
+
+            {!loading && orders.length === 0 ? <p className="text-sm text-slate-600">No seller orders found.</p> : null}
+
+            {!loading && orders.length > 0 ? (
+              <div className="space-y-4">
+                {orders.map((order) => (
+                  <article key={order.id} className="rounded-xl border border-slate-200 p-4">
+                    <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                      <p className="text-sm font-semibold text-slate-900">Order #{order.id.slice(-8).toUpperCase()}</p>
+                      <p className="text-xs text-slate-500">{new Date(order.createdAt).toLocaleString()}</p>
+                    </div>
+
+                    <div className="space-y-2">
+                      {(order.items ?? []).map((item) => (
+                        <div key={item.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-100 p-2">
+                          <div>
+                            <p className="text-sm font-medium text-slate-900">{item.title} x {item.quantity}</p>
+                            <p className="text-xs text-slate-500">Rs {(item.price * item.quantity).toFixed(2)}</p>
+                          </div>
+
+                          <select
+                            value={item.status}
+                            onChange={(event) => onStatusChange(order.id, item.id, event.target.value)}
+                            className="rounded-md border border-slate-200 px-2 py-1 text-xs"
+                          >
+                            {ORDER_STATUSES.map((status) => (
+                              <option key={status} value={status}>
+                                {status}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      ))}
+                    </div>
+                  </article>
+                ))}
+              </div>
+            ) : null}
+          </section>
+        ) : null}
       </main>
     </div>
   );
 }
 
-// --- SUB-COMPONENTS ---
-
-function SidebarItem({ icon, label, active, onClick }) {
+function Card({ title, value }) {
   return (
-    <button
-      onClick={onClick}
-      className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-all ${
-        active 
-          ? 'bg-emerald-50 text-emerald-700 shadow-sm' 
-          : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'
-      }`}
-    >
-      {icon}
-      {label}
-    </button>
-  );
-}
-
-function OverviewView({ revenueData }) {
-  return (
-    <div className="space-y-8">
-      {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <StatCard title="Total Revenue" value="$12,840" icon={<DollarSign className="text-emerald-600" />} trend="+12.5%" color="bg-emerald-50" />
-        <StatCard title="Total Sales" value="482" icon={<ShoppingCart className="text-blue-600" />} trend="+8.2%" color="bg-blue-50" />
-        <StatCard title="Active Products" value="24" icon={<Package className="text-purple-600" />} trend="0%" color="bg-purple-50" />
-        <StatCard title="Store Rating" value="4.9/5" icon={<TrendingUp className="text-orange-600" />} trend="+0.1" color="bg-orange-50" />
-      </div>
-
-      {/* Chart Section */}
-      <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-        <div className="flex justify-between items-center mb-6">
-          <h3 className="text-lg font-bold text-slate-800">Revenue Performance</h3>
-          <select className="bg-slate-50 border-none text-sm rounded-lg focus:ring-emerald-500">
-            <option>Last 6 Months</option>
-            <option>Last Year</option>
-          </select>
-        </div>
-        <div className="h-[300px] w-full">
-          <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={revenueData}>
-              <defs>
-                <linearGradient id="colorRev" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#10b981" stopOpacity={0.1}/>
-                  <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-              <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 12}} />
-              <YAxis axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 12}} />
-              <Tooltip contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)'}} />
-              <Area type="monotone" dataKey="revenue" stroke="#10b981" strokeWidth={3} fillOpacity={1} fill="url(#colorRev)" />
-            </AreaChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
+    <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+      <p className="text-sm text-slate-500">{title}</p>
+      <p className="mt-2 text-2xl font-black text-slate-900">{value}</p>
     </div>
   );
 }
 
-function StatCard({ title, value, icon, trend, color }) {
+function Input({ label, value, onChange, type = 'text' }) {
   return (
-    <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-      <div className="flex justify-between items-start">
-        <div className={`p-3 rounded-xl ${color}`}>{icon}</div>
-        <span className="text-xs font-bold text-emerald-600 flex items-center bg-emerald-50 px-2 py-1 rounded-full">
-          {trend} <ArrowUpRight size={14} />
-        </span>
-      </div>
-      <div className="mt-4">
-        <p className="text-sm text-slate-500 font-medium">{title}</p>
-        <h4 className="text-2xl font-bold text-slate-900 mt-1">{value}</h4>
-      </div>
-    </div>
-  );
-}
-
-function AddProductForm({ onSuccess }) {
-  return (
-    <div className="max-w-2xl bg-white p-8 rounded-2xl border border-slate-200 shadow-sm mx-auto">
-      <h3 className="text-xl font-bold text-slate-800 mb-6">List New Eco-Product</h3>
-      <form className="space-y-5">
-        <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">Product Name</label>
-          <input type="text" placeholder="e.g. Bamboo Toothbrush" className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none transition-all" />
-        </div>
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Category</label>
-            <select className="w-full px-4 py-3 rounded-xl border border-slate-200 outline-none">
-              <option>Personal Care</option>
-              <option>Kitchenware</option>
-              <option>Fashion</option>
-              <option>Home Decor</option>
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Price ($)</label>
-            <input type="number" placeholder="29.99" className="w-full px-4 py-3 rounded-xl border border-slate-200 outline-none" />
-          </div>
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">Product Image</label>
-          <div className="border-2 border-dashed border-slate-200 rounded-xl p-8 text-center hover:bg-slate-50 cursor-pointer transition-all">
-            <PlusCircle className="mx-auto text-slate-400 mb-2" />
-            <p className="text-sm text-slate-500">Click to upload or drag and drop</p>
-          </div>
-        </div>
-        <button type="button" onClick={onSuccess} className="w-full bg-emerald-600 text-white font-bold py-4 rounded-xl hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-200">
-          Publish Product
-        </button>
-      </form>
-    </div>
-  );
-}
-
-function InventoryTable() {
-  const products = [
-    { id: 1, name: 'Organic Cotton Bag', category: 'Fashion', price: '$15.00', sales: 120, stock: 45 },
-    { id: 2, name: 'Glass Water Bottle', category: 'Kitchenware', price: '$24.00', sales: 85, stock: 12 },
-    { id: 3, name: 'Recycled Notebook', category: 'Office', price: '$10.00', sales: 200, stock: 0 },
-  ];
-
-  return (
-    <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-      <div className="p-6 border-b border-slate-100 flex justify-between items-center">
-        <h3 className="text-lg font-bold text-slate-800">Your Products</h3>
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-          <input type="text" placeholder="Search inventory..." className="pl-10 pr-4 py-2 bg-slate-50 border-none rounded-lg text-sm focus:ring-2 focus:ring-emerald-500" />
-        </div>
-      </div>
-      <table className="w-full text-left">
-        <thead className="bg-slate-50 text-slate-500 text-xs uppercase font-bold">
-          <tr>
-            <th className="px-6 py-4">Product</th>
-            <th className="px-6 py-4">Category</th>
-            <th className="px-6 py-4">Price</th>
-            <th className="px-6 py-4">Stock</th>
-            <th className="px-6 py-4">Status</th>
-            <th className="px-6 py-4">Actions</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-slate-100">
-          {products.map((p) => (
-            <tr key={p.id} className="hover:bg-slate-50 transition-colors">
-              <td className="px-6 py-4 font-medium text-slate-900">{p.name}</td>
-              <td className="px-6 py-4 text-slate-600">{p.category}</td>
-              <td className="px-6 py-4 text-slate-900">{p.price}</td>
-              <td className="px-6 py-4 text-slate-600">{p.stock}</td>
-              <td className="px-6 py-4">
-                <span className={`px-3 py-1 rounded-full text-xs font-bold ${p.stock > 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                  {p.stock > 0 ? 'In Stock' : 'Out of Stock'}
-                </span>
-              </td>
-              <td className="px-6 py-4 flex gap-3">
-                <button className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"><Edit size={18}/></button>
-                <button className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"><Trash2 size={18}/></button>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+    <div>
+      <label className="mb-1 block text-sm font-semibold text-slate-700">{label}</label>
+      <input
+        type={type}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder={`Enter ${label.toLowerCase()}`}
+        className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400"
+      />
     </div>
   );
 }
