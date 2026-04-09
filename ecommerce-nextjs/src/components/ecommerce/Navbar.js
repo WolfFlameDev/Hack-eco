@@ -13,7 +13,7 @@ export default function Navbar({ cartCount = 0, searchTerm, onSearch }) {
   const [isMounted, setIsMounted] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const { isAuthenticated, user } = useAuth();
+  const { isAuthenticated, user, loading } = useAuth();
   const router = useRouter();
   const dispatch = useDispatch();
 
@@ -32,6 +32,12 @@ export default function Navbar({ cartCount = 0, searchTerm, onSearch }) {
     } catch (error) {
       console.error('Logout failed:', error);
     }
+  };
+
+  const getDashboardRoute = (role) => {
+    if (role === 'seller') return '/seller/dashboard';
+    if (role === 'admin') return '/admin/dashboard';
+    return '/user/dashboard';
   };
 
   return (
@@ -95,7 +101,11 @@ export default function Navbar({ cartCount = 0, searchTerm, onSearch }) {
           </Link>
 
           {/* Auth Section */}
-          {isMounted && isAuthenticated ? (
+          {(!isMounted || loading) ? (
+            <div className="flex items-center gap-2">
+              <div className="h-10 w-10 rounded-full bg-slate-200 animate-pulse" />
+            </div>
+          ) : isAuthenticated ? (
             <div className="relative">
               <button
                 onClick={() => setShowDropdown(!showDropdown)}
@@ -107,13 +117,24 @@ export default function Navbar({ cartCount = 0, searchTerm, onSearch }) {
 
               {/* Dropdown Menu */}
               {showDropdown && (
-                <div className="absolute right-0 mt-2 w-48 rounded-xl border border-slate-200 bg-white shadow-lg z-50 overflow-hidden animate-in fade-in duration-200">
+                <div className="absolute right-0 mt-2 w-52 rounded-xl border border-slate-200 bg-white shadow-lg z-50 overflow-hidden animate-in fade-in duration-200">
                   <div className="border-b border-slate-100 px-4 py-3">
                     <p className="text-sm font-semibold text-slate-900">{user?.name || 'Account'}</p>
                     <p className="text-xs text-slate-500">{user?.email}</p>
                   </div>
 
                   <div className="py-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowDropdown(false);
+                        router.replace(getDashboardRoute(user?.role));
+                      }}
+                      className="flex items-center gap-3 w-full px-4 py-3 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
+                    >
+                      <User size={16} className="text-green-600" />
+                      Dashboard
+                    </button>
                     <Link
                       href="/user/profile"
                       className="flex items-center gap-3 px-4 py-3 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
@@ -121,14 +142,6 @@ export default function Navbar({ cartCount = 0, searchTerm, onSearch }) {
                     >
                       <User size={16} className="text-green-600" />
                       My Profile
-                    </Link>
-                    <Link
-                      href="/user/orders"
-                      className="flex items-center gap-3 px-4 py-3 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
-                      onClick={() => setShowDropdown(false)}
-                    >
-                      <Package size={16} className="text-green-600" />
-                      My Orders
                     </Link>
                   </div>
 
@@ -144,23 +157,16 @@ export default function Navbar({ cartCount = 0, searchTerm, onSearch }) {
                 </div>
               )}
             </div>
-          ) : isMounted ? (
+          ) : (
             <div className="flex items-center gap-2">
               <Link
                 href="/auth/login"
                 className="flex items-center gap-2 rounded-lg bg-green-600 px-4 py-2 text-sm font-semibold text-white hover:bg-green-700 transition-colors shadow-md shadow-green-100"
               >
-              
                 Login
               </Link>
-              {/* <Link
-                href="/auth/register"
-                className="flex items-center gap-2 rounded-lg bg-green-600 px-4 py-2 text-sm font-semibold text-white hover:bg-green-700 transition-colors shadow-md shadow-green-100"
-              >
-                Sign Up
-              </Link> */}
             </div>
-          ) : null}
+          )}
 
           {/* Mobile Menu Toggle */}
           <button

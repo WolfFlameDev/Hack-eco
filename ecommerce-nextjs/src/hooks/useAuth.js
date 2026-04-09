@@ -32,14 +32,23 @@ export const useAuth = () => {
     isAuthenticated,
   } = useSelector((state) => state.auth);
 
-  // Initialize auth on app start
+  // Initialize auth on app start using cookie-based session
   useEffect(() => {
-    const token = authService.getToken();
-    const user = authService.getUser();
+    const initializeAuthState = async () => {
+      try {
+        const response = await authService.fetchMe();
+        if (response.success && response.data?.user) {
+          dispatch(initializeAuth({
+            user: response.data.user,
+            token: 'cookie',
+          }));
+        }
+      } catch (error) {
+        // No session or invalid token; leave auth state empty.
+      }
+    };
 
-    if (token && user) {
-      dispatch(initializeAuth({ token, user }));
-    }
+    initializeAuthState();
   }, [dispatch]);
 
   const login = async (credentials) => {

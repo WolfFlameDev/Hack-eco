@@ -10,8 +10,7 @@ import { motion } from 'framer-motion';
 import { useAuth } from '@/hooks/useAuth';
 import { Toaster, toast } from 'sonner';
 import AuthLayout from '@/components/AuthLayout';
-import 
-InputField from '@/components/InputField';
+import InputField from '@/components/InputField';
 import ButtonLoader from '@/components/ButtonLoader';
 import { Check } from 'lucide-react';
 
@@ -42,20 +41,11 @@ export default function LoginPage() {
         description: 'Welcome back to EcoShop!',
       });
 
-      // Store remember me preference
       if (rememberMe) {
         localStorage.setItem('rememberMe', 'true');
       }
 
-      // Redirect based on role
-      const user = JSON.parse(localStorage.getItem('user'));
-      if (user?.role === 'admin') {
-        router.push('/admin/dashboard');
-      } else if (user?.role === 'seller') {
-        router.push('/seller/dashboard');
-      } else {
-        router.push('/user/dashboard');
-      }
+      router.replace(response.redirectPath || '/user/dashboard');
     } catch (error) {
       toast.error('Login failed', {
         description: error.error || 'Please check your credentials and try again.',

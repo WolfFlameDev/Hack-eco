@@ -1,5 +1,6 @@
 import jwt from 'jsonwebtoken';
-import { AUTH_COOKIE_NAME } from '@/lib/auth';
+
+const AUTH_COOKIE_NAME = 'ecocommerce_auth';
 
 const getJwtSecret = () => {
   if (!process.env.JWT_SECRET) {

@@ -19,9 +19,9 @@ const authSlice = createSlice({
     },
     loginSuccess: (state, action) => {
       state.user = action.payload.user;
-      state.token = action.payload.token;
+      state.token = action.payload.token || 'cookie';
       state.loading = false;
-      state.isAuthenticated = !!action.payload.token;
+      state.isAuthenticated = true;
       state.error = null;
     },
     loginFailure: (state, action) => {
@@ -37,9 +37,9 @@ const authSlice = createSlice({
     },
     registerSuccess: (state, action) => {
       state.user = action.payload.user;
-      state.token = action.payload.token;
+      state.token = action.payload.token || 'cookie';
       state.loading = false;
-      state.isAuthenticated = !!action.payload.token;
+      state.isAuthenticated = true;
       state.error = null;
     },
     registerFailure: (state, action) => {
@@ -112,11 +112,11 @@ const authSlice = createSlice({
       state.error = null;
     },
 
-    // Initialize auth from localStorage
+    // Initialize auth from server session
     initializeAuth: (state, action) => {
       state.user = action.payload.user;
-      state.token = action.payload.token;
-      state.isAuthenticated = !!action.payload.token;
+      state.token = action.payload.token || 'cookie';
+      state.isAuthenticated = true;
     },
   },
 });

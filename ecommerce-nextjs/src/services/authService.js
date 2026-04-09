@@ -9,28 +9,13 @@ class AuthService {
       headers: {
         'Content-Type': 'application/json',
       },
+      withCredentials: true,
     });
 
-    // Add request interceptor to include token
-    this.api.interceptors.request.use(
-      (config) => {
-        const token = this.getToken();
-        if (token) {
-          config.headers.Authorization = `Bearer ${token}`;
-        }
-        return config;
-      },
-      (error) => {
-        return Promise.reject(error);
-      }
-    );
-
-    // Add response interceptor to handle token expiration
     this.api.interceptors.response.use(
       (response) => response,
       (error) => {
-        if (error.response?.status === 401) {
-          this.logout();
+        if (error.response?.status === 401 && !error.config?.url?.includes('/api/auth/me')) {
           window.location.href = '/auth/login';
         }
         return Promise.reject(error);
@@ -38,60 +23,10 @@ class AuthService {
     );
   }
 
-  // Token management
-  setToken(token) {
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('token', token);
-    }
-  }
-
-  getToken() {
-    if (typeof window !== 'undefined') {
-      return localStorage.getItem('token');
-    }
-    return null;
-  }
-
-  removeToken() {
-    if (typeof window !== 'undefined') {
-      localStorage.removeItem('token');
-    }
-  }
-
-  // User management
-  setUser(user) {
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('user', JSON.stringify(user));
-    }
-  }
-
-  getUser() {
-    if (typeof window !== 'undefined') {
-      const user = localStorage.getItem('user');
-      return user ? JSON.parse(user) : null;
-    }
-    return null;
-  }
-
-  removeUser() {
-    if (typeof window !== 'undefined') {
-      localStorage.removeItem('user');
-    }
-  }
-
   // Auth methods
   async login(credentials) {
     try {
       const response = await this.api.post('/api/auth/login', credentials);
-      const { user, token } = response.data;
-
-      if (token) {
-        this.setToken(token);
-      }
-      if (user) {
-        this.setUser(user);
-      }
-
       return response.data;
     } catch (error) {
       throw error.response?.data || error;
@@ -101,18 +36,26 @@ class AuthService {
   async register(userData) {
     try {
       const response = await this.api.post('/api/auth/register', userData);
-      const { user, token } = response.data;
-
-      if (token) {
-        this.setToken(token);
-      }
-      if (user) {
-        this.setUser(user);
-      }
-
       return response.data;
     } catch (error) {
       throw error.response?.data || error;
+    }
+  }
+
+  async fetchMe() {
+    try {
+      const response = await this.api.get('/api/auth/me');
+      return response.data;
+    } catch (error) {
+      throw error.response?.data || error;
+    }
+  }
+
+  async logout() {
+    try {
+      await this.api.post('/api/auth/logout');
+    } catch (error) {
+      console.error('Logout API error:', error);
     }
   }
 
