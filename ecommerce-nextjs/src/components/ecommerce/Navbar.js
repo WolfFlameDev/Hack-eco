@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { ShoppingCart, UserCircle, SearchIcon, Menu, LogOut, User, X } from 'lucide-react';
@@ -12,11 +12,64 @@ import authService from '@/services/authService';
 export default function Navbar({ cartCount = 0, searchTerm, onSearch }) {
   const [showDropdown, setShowDropdown] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [inputValue, setInputValue] = useState(searchTerm ?? '');
+  const [suggestions, setSuggestions] = useState([]);
+  const [suggestionsOpen, setSuggestionsOpen] = useState(false);
   const { isAuthenticated, user, loading } = useAuth();
   const router = useRouter();
   const dispatch = useDispatch();
   const canUseCart = !user || user.role === 'user';
   const showCartCount = cartCount > 0;
+
+  useEffect(() => {
+    setInputValue(searchTerm ?? '');
+  }, [searchTerm]);
+
+  useEffect(() => {
+    const query = inputValue.trim();
+    if (!query) {
+      setSuggestions([]);
+      setSuggestionsOpen(false);
+      return undefined;
+    }
+
+    const timer = setTimeout(async () => {
+      try {
+        const response = await fetch(`/api/products/search?q=${encodeURIComponent(query)}&limit=6`, {
+          credentials: 'include',
+        });
+        const payload = await response.json();
+        if (!response.ok || !payload.success) {
+          throw new Error(payload.message || 'Search failed');
+        }
+
+        setSuggestions(payload.data?.products ?? []);
+        setSuggestionsOpen(true);
+      } catch {
+        setSuggestions([]);
+        setSuggestionsOpen(false);
+      }
+    }, 180);
+
+    return () => clearTimeout(timer);
+  }, [inputValue]);
+
+  const handleSearchChange = (value) => {
+    setInputValue(value);
+    onSearch?.(value);
+  };
+
+  const openSuggestion = (productId) => {
+    setSuggestionsOpen(false);
+    setInputValue('');
+    onSearch?.('');
+    router.push(`/products/${productId}`);
+  };
+
+  const openChatbot = (query) => {
+    setSuggestionsOpen(false);
+    window.dispatchEvent(new CustomEvent('eco:open-chatbot', { detail: { query } }));
+  };
 
   const handleLogout = async () => {
     try {
@@ -71,11 +124,45 @@ export default function Navbar({ cartCount = 0, searchTerm, onSearch }) {
             <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
             <input
               type="text"
-              value={searchTerm ?? ''}
-              onChange={(e) => onSearch?.(e.target.value)}
+              value={inputValue}
+              onChange={(e) => handleSearchChange(e.target.value)}
+              onFocus={() => {
+                if (suggestions.length) {
+                  setSuggestionsOpen(true);
+                }
+              }}
               placeholder="Search products..."
               className="h-10 w-full rounded-lg border border-slate-200 bg-slate-50 pl-10 pr-4 text-sm outline-none transition-all focus:border-green-500 focus:bg-white focus:ring-4 focus:ring-green-50"
             />
+
+            {suggestionsOpen && suggestions.length ? (
+              <div className="absolute left-0 right-0 top-12 z-50 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl">
+                {suggestions.map((product) => (
+                  <div key={product.id} className="flex items-center justify-between gap-3 border-b border-slate-100 px-3 py-3 last:border-b-0">
+                    <button
+                      type="button"
+                      onClick={() => openSuggestion(product.id)}
+                      className="flex min-w-0 flex-1 items-center gap-3 text-left"
+                    >
+                      <div className="h-10 w-10 overflow-hidden rounded-lg bg-slate-100">
+                        {product.image ? <img src={product.image} alt={product.title} className="h-full w-full object-cover" /> : null}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-semibold text-slate-900">{product.title}</p>
+                        <p className="truncate text-xs text-slate-500">{product.category} | Rs {Number(product.price || 0).toLocaleString('en-IN')}</p>
+                      </div>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => openChatbot(product.title)}
+                      className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-[11px] font-semibold text-emerald-700"
+                    >
+                      Ask AI
+                    </button>
+                  </div>
+                ))}
+              </div>
+            ) : null}
           </div>
         </div>
 

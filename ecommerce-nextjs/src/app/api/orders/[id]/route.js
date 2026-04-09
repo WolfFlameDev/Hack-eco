@@ -3,6 +3,7 @@ import connectDB from '@/lib/db';
 import { requireRole } from '@/lib/api-auth';
 import Order, { ORDER_STATUS_FLOW } from '@/models/Order';
 import { sendOrderStatusEmail } from '@/lib/email';
+import { mapOrder } from '@/lib/order-utils';
 
 const VALID_STATUSES = ORDER_STATUS_FLOW;
 
@@ -10,52 +11,6 @@ const STATUS_INDEX = VALID_STATUSES.reduce((acc, status, index) => {
   acc[status] = index;
   return acc;
 }, {});
-
-const mapOrder = (order, currentUser) => {
-  const items = order.items
-    .filter((item) => {
-      if (currentUser?.role !== 'seller') {
-        return true;
-      }
-      return item.seller.toString() === currentUser._id.toString();
-    })
-    .map((item) => ({
-      id: String(item._id),
-      productId: String(item.product),
-      sellerId: String(item.seller),
-      title: item.title,
-      price: item.price,
-      quantity: item.quantity,
-      image: item.image,
-      category: item.category,
-      status: item.status,
-    }));
-
-  return {
-    id: String(order._id),
-    orderId: String(order._id),
-    userId: String(order.user?._id ?? order.user),
-    user: order.user?._id
-      ? {
-          id: String(order.user._id),
-          name: order.user.name,
-          email: order.user.email,
-        }
-      : null,
-    items,
-    status: order.status,
-    paymentStatus: order.paymentStatus,
-    subtotal: order.subtotal,
-    shippingFee: order.shippingFee,
-    totalAmount: order.totalAmount,
-    shippingAddress: order.shippingAddress,
-    trackingDetails: order.trackingDetails ?? {},
-    statusTimeline: order.statusTimeline ?? {},
-    createdAt: order.createdAt,
-    updatedAt: order.updatedAt,
-    paymentDetails: order.paymentDetails,
-  };
-};
 
 function isValidTransition(currentStatus, nextStatus) {
   if (currentStatus === nextStatus) {
@@ -185,7 +140,7 @@ export async function PATCH(request, { params }) {
     await order.save();
 
     const populatedOrder = await Order.findById(order._id).populate('user', 'name email');
-    if (status === 'shipped' && populatedOrder?.user?.email) {
+    if ((status === 'shipped' || status === 'delivered') && populatedOrder?.user?.email) {
       sendOrderStatusEmail(populatedOrder, populatedOrder.user, order.status).catch((e) =>
         console.error('Order status email error:', e.message)
       );

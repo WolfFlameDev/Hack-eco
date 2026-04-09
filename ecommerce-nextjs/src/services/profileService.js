@@ -17,6 +17,15 @@ export async function getProfile() {
   return parseResponse(response);
 }
 
+export async function getDashboardProfile() {
+  const response = await fetch('/api/user/profile', {
+    credentials: 'include',
+    cache: 'no-store',
+  });
+
+  return parseResponse(response);
+}
+
 export async function updateProfile(payload) {
   const response = await fetch('/api/auth/profile', {
     method: 'PATCH',

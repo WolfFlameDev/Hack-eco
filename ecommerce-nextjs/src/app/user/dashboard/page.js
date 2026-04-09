@@ -6,11 +6,13 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 import Navbar from '@/components/ecommerce/Navbar';
 import { getOrders } from '@/services/orderService';
+import { getDashboardProfile } from '@/services/profileService';
 
 export default function UserDashboard() {
   const router = useRouter();
   const { initialized, isAuthenticated, user, logout } = useAuth();
   const [orders, setOrders] = useState([]);
+  const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -36,12 +38,13 @@ export default function UserDashboard() {
       try {
         setLoading(true);
         setError('');
-        const data = await getOrders('user');
+        const [data, profileData] = await Promise.all([getOrders('user'), getDashboardProfile()]);
         if (!active) {
           return;
         }
 
         setOrders(data.orders ?? []);
+        setProfile(profileData);
       } catch (err) {
         if (!active) {
           return;
@@ -71,8 +74,9 @@ export default function UserDashboard() {
 
     const timer = setInterval(async () => {
       try {
-        const data = await getOrders('user');
+        const [data, profileData] = await Promise.all([getOrders('user'), getDashboardProfile()]);
         setOrders(data.orders ?? []);
+        setProfile(profileData);
       } catch {
         // ignore transient poll errors, next cycle retries
       }
@@ -104,8 +108,13 @@ export default function UserDashboard() {
       <main className="mx-auto max-w-7xl px-4 pb-16 pt-28 sm:px-6 lg:px-8">
         <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-black text-slate-900">My Dashboard</h1>
+            <h1 className="text-3xl font-black text-slate-900">{profile?.user?.name ? `${profile.user.name}'s Dashboard` : 'My Dashboard'}</h1>
             <p className="mt-1 text-sm text-slate-600">Track your orders and recent purchases.</p>
+            <p className="mt-2 text-sm text-slate-500">
+              {profile?.user?.email || user?.email || 'No email'}
+              {' · '}
+              {profile?.metrics?.phone || profile?.user?.phone || 'No phone added'}
+            </p>
           </div>
 
           <div className="flex items-center gap-3">
@@ -137,9 +146,9 @@ export default function UserDashboard() {
         </div>
 
         <section className="mb-8 grid gap-4 md:grid-cols-3">
-          <StatCard label="Total Orders" value={orders.length} />
+          <StatCard label="Total Orders" value={profile?.metrics?.orders ?? orders.length} />
           <StatCard label="Delivered" value={summary.delivered} />
-          <StatCard label="Total Spent" value={`Rs ${summary.total.toFixed(2)}`} />
+          <StatCard label="Total Spent" value={`Rs ${(profile?.metrics?.totalSpent ?? summary.total).toFixed(2)}`} />
         </section>
 
         <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">

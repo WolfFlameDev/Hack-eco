@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useDispatch, useSelector } from 'react-redux';
 import { addToCompare, removeFromCompare } from '@/redux/slices/compareSlice';
 
@@ -20,7 +21,9 @@ export default function ProductCard({ product, onAddToCart }) {
   return (
     <article className="group flex flex-col overflow-hidden rounded-4xl border border-slate-200 bg-white transition duration-300 hover:-translate-y-1 hover:shadow-2xl hover:shadow-green-50">
       <div className="relative overflow-hidden border-b border-slate-200">
-        <img src={product.image} alt={product.name} className="h-64 w-full object-cover transition-transform duration-500 group-hover:scale-105" />
+        <Link href={`/products/${product.id}`}>
+          <img src={product.image} alt={product.name} className="h-64 w-full object-cover transition-transform duration-500 group-hover:scale-105" />
+        </Link>
         <span className="absolute left-4 top-4 rounded-full bg-white/90 px-3 py-1 text-xs font-bold uppercase tracking-[0.2em] text-slate-700 shadow-sm">
           {product.category}
         </span>
@@ -42,7 +45,9 @@ export default function ProductCard({ product, onAddToCart }) {
 
       <div className="flex flex-1 flex-col p-6">
         <div className="mb-4 flex items-center justify-between gap-3">
-          <h3 className="text-xl font-bold text-slate-900">{product.name}</h3>
+          <Link href={`/products/${product.id}`} className="text-xl font-bold text-slate-900 hover:text-green-700">
+            {product.name}
+          </Link>
           <p className="text-lg font-black text-green-600">₹{product.price}</p>
         </div>
         <p className="text-sm leading-6 text-slate-600 line-clamp-2">{product.description}</p>
@@ -59,6 +64,12 @@ export default function ProductCard({ product, onAddToCart }) {
           >
             Add to Cart
           </button>
+          <Link
+            href={`/products/${product.id}`}
+            className="mt-3 inline-flex w-full items-center justify-center rounded-full border border-slate-200 px-6 py-3 text-sm font-bold uppercase tracking-[0.18em] text-slate-700 transition hover:bg-slate-50"
+          >
+            View Details
+          </Link>
         </div>
       </div>
     </article>

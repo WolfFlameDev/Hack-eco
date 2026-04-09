@@ -16,7 +16,7 @@ const Footer = () => {
             </span>
           </div>
           <p className="text-slate-500 leading-relaxed text-sm">
-            The world's first carbon-neutral marketplace connecting conscious consumers with verified sustainable brands.
+            The world&apos;s first carbon-neutral marketplace connecting conscious consumers with verified sustainable brands.
           </p>
           {/* Social Handles */}
           <div className="flex space-x-4 pt-2">

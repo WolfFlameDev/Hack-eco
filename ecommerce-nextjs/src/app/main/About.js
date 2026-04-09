@@ -41,7 +41,7 @@ const About = () => {
                </div>
             </div>
             <div className="absolute -bottom-6 -left-6 bg-white p-6 rounded-2xl shadow-xl border border-slate-100 hidden md:block">
-              <p className="text-sm font-bold text-slate-900 italic">"The best for the world, not just in the world."</p>
+              <p className="text-sm font-bold text-slate-900 italic">&quot;The best for the world, not just in the world.&quot;</p>
             </div>
           </div>
         </div>
@@ -79,7 +79,7 @@ const About = () => {
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"></circle><path d="M12 6v6l4 2"></path></svg>
             </div>
             <h3 className="text-xl font-bold text-slate-900 mb-3">Future Focused</h3>
-            <p className="text-slate-600 leading-relaxed text-sm">We don't just solve today's problems; we invest in the technology of tomorrow.</p>
+            <p className="text-slate-600 leading-relaxed text-sm">We don&apos;t just solve today&apos;s problems; we invest in the technology of tomorrow.</p>
           </div>
         </div>
       </section>

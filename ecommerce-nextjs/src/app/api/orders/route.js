@@ -3,56 +3,9 @@ import connectDB from '@/lib/db';
 import { requireAuth } from '@/lib/api-auth';
 import Cart from '@/models/Cart';
 import Order from '@/models/Order';
-import Product from '@/models/Product';
 import { verifyPaymentSignature } from '@/lib/razorpay';
 import { sendOrderConfirmationEmail } from '@/lib/email';
-
-const mapOrder = (order, currentUser) => {
-  const items = order.items
-    .filter((item) => {
-      if (currentUser?.role !== 'seller') {
-        return true;
-      }
-
-      return item.seller.toString() === currentUser._id.toString();
-    })
-    .map((item) => ({
-      id: String(item._id),
-      productId: String(item.product),
-      sellerId: String(item.seller),
-      title: item.title,
-      price: item.price,
-      quantity: item.quantity,
-      image: item.image,
-      category: item.category,
-      status: item.status,
-    }));
-
-  return {
-    id: String(order._id),
-    orderId: String(order._id),
-    userId: String(order.user?._id ?? order.user),
-    user: order.user?._id
-      ? {
-          id: String(order.user._id),
-          name: order.user.name,
-          email: order.user.email,
-        }
-      : null,
-    items,
-    status: order.status,
-    paymentStatus: order.paymentStatus,
-    subtotal: order.subtotal,
-    shippingFee: order.shippingFee,
-    totalAmount: order.totalAmount,
-    shippingAddress: order.shippingAddress,
-    trackingDetails: order.trackingDetails ?? {},
-    statusTimeline: order.statusTimeline ?? {},
-    createdAt: order.createdAt,
-    updatedAt: order.updatedAt,
-    paymentDetails: order.paymentDetails,
-  };
-};
+import { finalizeOrderPayment, mapOrder } from '@/lib/order-utils';
 
 export async function GET(request) {
   const auth = await requireAuth(request);
@@ -132,57 +85,32 @@ export async function POST(request) {
       }
     }
 
-  for (const item of order.items) {
-    const product = await Product.findById(item.product);
-    if (!product || !product.isActive) {
-      return NextResponse.json(
-        { success: false, message: `Product ${item.title} is no longer available.` },
-        { status: 400 }
-      );
-    }
-
-    if (product.stock < item.quantity) {
-      return NextResponse.json(
-        { success: false, message: `${item.title} has insufficient stock for this order.` },
-        { status: 400 }
-      );
-    }
-
-    product.stock -= item.quantity;
-    await product.save();
+  let populatedOrder;
+  try {
+    populatedOrder = await finalizeOrderPayment({
+      order,
+      payment: {
+        razorpay_order_id: payment.razorpay_order_id,
+        razorpay_payment_id: payment.razorpay_payment_id ?? `mock_payment_${Date.now()}`,
+        razorpay_signature: payment.razorpay_signature ?? 'mock_signature',
+      },
+      verificationMode: verification.mode,
+      isCOD,
+    });
+  } catch (error) {
+    return NextResponse.json({ success: false, message: error.message || 'Unable to finalize order.' }, { status: 400 });
   }
 
-  order.paymentStatus = 'paid';
-  order.status = 'confirmed';
-  order.items.forEach((item) => {
-    item.status = 'confirmed';
-  });
-  order.statusTimeline = {
-    ...(order.statusTimeline || {}),
-    confirmedAt: order.statusTimeline?.confirmedAt || new Date(),
-  };
-  order.paymentDetails = {
-    ...order.paymentDetails,
-      ...(isCOD
-        ? { mode: 'cod' }
-        : {
-            razorpayOrderId: payment.razorpay_order_id ?? order.paymentDetails?.razorpayOrderId,
-            razorpayPaymentId: payment.razorpay_payment_id ?? `mock_payment_${Date.now()}`,
-            razorpaySignature: payment.razorpay_signature ?? 'mock_signature',
-            mode: verification.mode,
-          }),
-  };
-  await order.save();
-
-  await Cart.findOneAndUpdate({ user: auth.user._id }, { $set: { items: [] } });
-
-  const populatedOrder = await Order.findById(order._id).populate('user', 'name email role');
   sendOrderConfirmationEmail(populatedOrder, auth.user).catch((e) =>
     console.error('Order confirmation email error:', e.message)
   );
   return NextResponse.json({
     success: true,
     message: 'Order placed successfully.',
-    data: mapOrder(populatedOrder, auth.user),
+    data: {
+      ...mapOrder(populatedOrder, auth.user),
+      paymentId: populatedOrder.paymentDetails?.razorpayPaymentId ?? null,
+      status: populatedOrder.paymentStatus,
+    },
   });
 }

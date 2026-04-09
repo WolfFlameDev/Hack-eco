@@ -25,7 +25,7 @@ export async function getOrders(view) {
 }
 
 export async function updateOrderStatus(orderId, status, itemId, trackingDetails) {
-  const response = await fetch(`/api/orders/${orderId}`, {
+  const response = await fetch(`/api/orders/${orderId}/status`, {
     method: 'PATCH',
     headers: {
       'Content-Type': 'application/json',

@@ -30,7 +30,8 @@ async function parseResponse(response) {
 }
 
 export async function createCheckout(shippingAddress, method) {
-  const response = await fetch('/api/checkout', {
+  const endpoint = method === 'cod' ? '/api/checkout' : '/api/payment/create-order';
+  const response = await fetch(endpoint, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -43,13 +44,14 @@ export async function createCheckout(shippingAddress, method) {
 }
 
 export async function finalizeOrder(orderId, payment) {
-  const response = await fetch('/api/orders', {
+  const endpoint = payment?.method === 'cod' ? '/api/orders' : '/api/payment/verify';
+  const response = await fetch(endpoint, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
     },
     credentials: 'include',
-    body: JSON.stringify({ orderId, payment }),
+    body: JSON.stringify(payment?.method === 'cod' ? { orderId, payment } : { orderId, ...payment }),
   });
 
   return parseResponse(response);
