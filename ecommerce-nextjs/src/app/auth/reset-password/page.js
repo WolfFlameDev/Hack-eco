@@ -32,32 +32,19 @@ export default function ResetPasswordPage() {
 
   const { resetPassword, loading } = useAuth();
   const router = useRouter();
-  const [token, setToken] = useState('');
 
   const {
     register,
     handleSubmit,
+    watch,
     formState: { errors },
   } = useForm({
     resolver: zodResolver(resetPasswordSchema),
   });
 
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const tokenParam = params.get('token');
-    if (!tokenParam) {
-      toast.error('Invalid reset link', {
-        description: 'Please check your email for the correct reset link.',
-      });
-      router.push('/auth/forgot-password');
-      return;
-    }
-    setToken(tokenParam);
-  }, [router]);
-
   const onSubmit = async (data) => {
     try {
-      await resetPassword(token, data.password);
+      await resetPassword(data.email, data.otp, data.password);
       setSubmitted(true);
       toast.success('Password reset successful!', {
         description: 'You can now sign in with your new password.',
@@ -145,6 +132,24 @@ export default function ResetPasswordPage() {
 
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
         <InputField
+          label="Email address"
+          type="email"
+          placeholder="Enter your email"
+          icon="email"
+          error={errors.email?.message}
+          {...register('email')}
+        />
+
+        <InputField
+          label="OTP"
+          type="text"
+          placeholder="Enter 6-digit OTP"
+          icon="otp"
+          error={errors.otp?.message}
+          {...register('otp')}
+        />
+
+        <InputField
           label="New Password"
           type="password"
           placeholder="Enter new password (min 6 characters)"
@@ -168,7 +173,7 @@ export default function ResetPasswordPage() {
           {...register('confirmPassword')}
         />
 
-        <ButtonLoader loading={loading} type="submit" disabled={!token}>
+        <ButtonLoader loading={loading} type="submit">
           Reset password
         </ButtonLoader>
 

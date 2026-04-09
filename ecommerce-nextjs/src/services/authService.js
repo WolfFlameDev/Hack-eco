@@ -85,8 +85,12 @@ class AuthService {
       const response = await this.api.post('/api/auth/login', credentials);
       const { user, token } = response.data;
 
-      this.setToken(token);
-      this.setUser(user);
+      if (token) {
+        this.setToken(token);
+      }
+      if (user) {
+        this.setUser(user);
+      }
 
       return response.data;
     } catch (error) {
@@ -99,8 +103,12 @@ class AuthService {
       const response = await this.api.post('/api/auth/register', userData);
       const { user, token } = response.data;
 
-      this.setToken(token);
-      this.setUser(user);
+      if (token) {
+        this.setToken(token);
+      }
+      if (user) {
+        this.setUser(user);
+      }
 
       return response.data;
     } catch (error) {

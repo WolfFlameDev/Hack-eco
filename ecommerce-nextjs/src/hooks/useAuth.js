@@ -66,10 +66,10 @@ export const useAuth = () => {
     }
   };
 
-  const verifyEmail = async (token) => {
+  const verifyEmail = async (email, otp) => {
     try {
       dispatch(verifyEmailStart());
-      const response = await authService.verifyEmail(token);
+      const response = await authService.verifyEmail(email, otp);
       dispatch(verifyEmailSuccess());
       return response;
     } catch (error) {
@@ -90,10 +90,10 @@ export const useAuth = () => {
     }
   };
 
-  const resetPassword = async (token, password) => {
+  const resetPassword = async (email, otp, password) => {
     try {
       dispatch(resetPasswordStart());
-      const response = await authService.resetPassword(token, password);
+      const response = await authService.resetPassword(email, otp, password);
       dispatch(resetPasswordSuccess());
       return response;
     } catch (error) {
