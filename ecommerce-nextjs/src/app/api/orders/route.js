@@ -6,6 +6,7 @@ import Order from '@/models/Order';
 import { verifyPaymentSignature } from '@/lib/razorpay';
 import { sendOrderConfirmationEmail } from '@/lib/email';
 import { finalizeOrderPayment, mapOrder } from '@/lib/order-utils';
+import mongoose from 'mongoose';
 
 export async function GET(request) {
   const auth = await requireAuth(request);
@@ -17,6 +18,10 @@ export async function GET(request) {
 
   const { searchParams } = new URL(request.url);
   const view = searchParams.get('view');
+
+  if (view && !['user', 'seller'].includes(view)) {
+    return NextResponse.json({ success: false, message: 'Invalid view parameter.' }, { status: 400 });
+  }
 
   const query = {};
   if (auth.user.role === 'user' || view === 'user') {
@@ -56,7 +61,13 @@ export async function POST(request) {
     return NextResponse.json({ success: false, message: 'orderId is required.' }, { status: 400 });
   }
 
-  const order = await Order.findOne({ _id: orderId, user: auth.user._id });
+  const isObjectId = mongoose.Types.ObjectId.isValid(orderId);
+
+  const order = await Order.findOne(
+    isObjectId
+      ? { _id: orderId, user: auth.user._id }
+      : { 'paymentDetails.razorpayOrderId': orderId, user: auth.user._id }
+  );
   if (!order) {
     return NextResponse.json({ success: false, message: 'Order not found.' }, { status: 404 });
   }

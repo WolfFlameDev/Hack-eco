@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ShoppingCart, UserCircle, SearchIcon, Menu, LogOut, User, X } from 'lucide-react';
+import { ShoppingCart, UserCircle, SearchIcon, Menu, LogOut, User, X, Bell } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useDispatch } from 'react-redux';
 import { logout } from '@/redux/slices/authSlice';
@@ -15,6 +15,8 @@ export default function Navbar({ cartCount = 0, searchTerm, onSearch }) {
   const [inputValue, setInputValue] = useState(searchTerm ?? '');
   const [suggestions, setSuggestions] = useState([]);
   const [suggestionsOpen, setSuggestionsOpen] = useState(false);
+  const [newArrivals, setNewArrivals] = useState([]);
+  const [showNotifs, setShowNotifs] = useState(false);
   const { isAuthenticated, user, loading } = useAuth();
   const router = useRouter();
   const dispatch = useDispatch();
@@ -24,6 +26,23 @@ export default function Navbar({ cartCount = 0, searchTerm, onSearch }) {
   useEffect(() => {
     setInputValue(searchTerm ?? '');
   }, [searchTerm]);
+
+  // Fetch new arrivals (products added in the last 24 h) to power the bell badge
+  useEffect(() => {
+    let active = true;
+    async function fetchNewArrivals() {
+      try {
+        const res = await fetch('/api/products/new-arrivals', { credentials: 'include', cache: 'no-store' });
+        const payload = await res.json();
+        if (!active || !payload.success) return;
+        setNewArrivals(payload.data ?? []);
+      } catch {
+        // silently ignore; bell simply shows no badge
+      }
+    }
+    fetchNewArrivals();
+    return () => { active = false; };
+  }, []);
 
   useEffect(() => {
     const query = inputValue.trim();
@@ -184,6 +203,76 @@ export default function Navbar({ cartCount = 0, searchTerm, onSearch }) {
             </Link>
           )}
 
+          {/* Notification Bell */}
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => {
+                setShowNotifs((prev) => !prev);
+                setShowDropdown(false);
+              }}
+              className="relative flex h-10 w-10 items-center justify-center rounded-full text-slate-600 hover:bg-slate-100 transition-colors"
+              title="New arrivals"
+            >
+              <Bell size={20} className={newArrivals.length > 0 ? 'text-green-600' : ''} />
+              {newArrivals.length > 0 && (
+                <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-green-600 text-[10px] font-bold text-white">
+                  {newArrivals.length > 9 ? '9+' : newArrivals.length}
+                </span>
+              )}
+            </button>
+
+            {showNotifs && (
+              <div className="absolute right-0 mt-2 w-72 rounded-2xl border border-slate-200 bg-white shadow-xl z-50 overflow-hidden">
+                <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
+                  <p className="text-sm font-black text-slate-900">New arrivals</p>
+                  <button
+                    type="button"
+                    onClick={() => setShowNotifs(false)}
+                    className="text-slate-400 hover:text-slate-700"
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+                {newArrivals.length === 0 ? (
+                  <p className="px-4 py-5 text-center text-sm text-slate-500">No new products in the last 24 h.</p>
+                ) : (
+                  <ul className="divide-y divide-slate-100 max-h-72 overflow-y-auto">
+                    {newArrivals.map((product) => (
+                      <li key={product.id}>
+                        <Link
+                          href={`/products/${product.id}`}
+                          className="flex items-center gap-3 px-4 py-3 hover:bg-slate-50 transition-colors"
+                          onClick={() => setShowNotifs(false)}
+                        >
+                          <div className="h-10 w-10 flex-shrink-0 overflow-hidden rounded-lg bg-slate-100">
+                            {product.image ? (
+                              <img src={product.image} alt={product.title} className="h-full w-full object-cover" />
+                            ) : (
+                              <span className="flex h-full w-full items-center justify-center text-lg">🛍️</span>
+                            )}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-semibold text-slate-900">{product.title}</p>
+                            <p className="text-xs text-slate-500">₹{Number(product.price || 0).toLocaleString('en-IN')} · {product.category}</p>
+                          </div>
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                <div className="border-t border-slate-100 px-4 py-3">
+                  <Link
+                    href="/"
+                    className="block text-center text-xs font-semibold text-green-600 hover:text-green-700"
+                    onClick={() => setShowNotifs(false)}
+                  >
+                    Browse all products →
+                  </Link>
+                </div>
+              </div>
+            )}
+          </div>
           {/* Auth Section */}
           {loading ? (
             <div className="flex items-center gap-2">

@@ -178,6 +178,10 @@ export default function UserDashboard() {
                     <span className="font-semibold text-slate-900">Rs {(order.totalAmount ?? 0).toFixed(2)}</span>
                   </div>
 
+                  <div className="mt-4">
+                    <OrderTimeline status={order.status} timeline={order.statusTimeline} />
+                  </div>
+
                   {order.trackingDetails?.trackingNumber || order.trackingDetails?.trackingUrl ? (
                     <div className="mt-3 rounded-lg border border-blue-100 bg-blue-50 p-3 text-xs text-blue-900">
                       <p className="font-semibold">Shipping</p>
@@ -256,5 +260,44 @@ function PaymentBadge({ label }) {
     <span className={`rounded-full px-3 py-1 text-xs font-semibold ${map[label] ?? 'bg-slate-100 text-slate-700'}`}>
       payment: {label}
     </span>
+  );
+}
+
+function OrderTimeline({ status, timeline = {} }) {
+  const steps = [
+    { key: 'pending', label: 'Pending', date: null },
+    { key: 'confirmed', label: 'Confirmed', date: timeline.confirmedAt },
+    { key: 'processing', label: 'Processing', date: timeline.processingAt },
+    { key: 'shipped', label: 'Shipped', date: timeline.shippedAt },
+    { key: 'delivered', label: 'Delivered', date: timeline.deliveredAt },
+  ];
+
+  const indexMap = steps.reduce((acc, step, idx) => {
+    acc[step.key] = idx;
+    return acc;
+  }, {});
+
+  const currentIndex = indexMap[status] ?? 0;
+
+  return (
+    <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+      <p className="text-xs font-black uppercase tracking-[0.15em] text-slate-500">Order timeline</p>
+      <div className="mt-3 grid gap-2 sm:grid-cols-5">
+        {steps.map((step, idx) => {
+          const completed = idx <= currentIndex;
+          return (
+            <div
+              key={step.key}
+              className={`rounded-lg border px-2 py-2 text-center ${completed ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-slate-200 bg-white text-slate-500'}`}
+            >
+              <p className="text-[11px] font-bold uppercase tracking-[0.12em]">{step.label}</p>
+              <p className="mt-1 text-[10px]">
+                {step.date ? new Date(step.date).toLocaleDateString('en-IN') : completed ? 'Updated' : 'Pending'}
+              </p>
+            </div>
+          );
+        })}
+      </div>
+    </div>
   );
 }

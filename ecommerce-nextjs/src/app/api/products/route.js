@@ -5,8 +5,7 @@ import { PRODUCT_CATEGORIES } from '@/lib/catalog';
 import { requireRole } from '@/lib/api-auth';
 import Product from '@/models/Product';
 import User from '@/models/User';
-
-void User;
+import { sendNewProductLaunchEmail } from '@/lib/email';
 
 const productSchema = z.object({
   title: z.string().trim().min(2),
@@ -131,6 +130,21 @@ export async function POST(request) {
   });
 
   const populatedProduct = await Product.findById(product._id).populate('seller', 'name email role');
+
+  // Fire-and-forget: send launch notification to all active users
+  (async () => {
+    try {
+      const users = await User.find({ isVerified: true, role: 'user' })
+        .select('email name')
+        .limit(2000)
+        .lean();
+      if (users.length) {
+        await sendNewProductLaunchEmail(populatedProduct, users);
+      }
+    } catch (error) {
+      console.error('[Products] Product launch email dispatch failed:', error.message);
+    }
+  })();
 
   return NextResponse.json(
     {

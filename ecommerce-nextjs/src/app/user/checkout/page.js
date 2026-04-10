@@ -36,6 +36,13 @@ export default function CheckoutPage() {
 
   useEffect(() => {
     setIsMounted(true);
+
+    if (typeof window !== 'undefined') {
+      const savedOrderId = window.sessionStorage.getItem('eco_last_order_id');
+      if (savedOrderId) {
+        setPlacedOrderId(savedOrderId);
+      }
+    }
   }, []);
 
   useEffect(() => {
@@ -112,11 +119,10 @@ export default function CheckoutPage() {
       dispatch(setCart([]));
       setPlacedOrderId(order.id);
       setOrderPlaced(true);
+      if (typeof window !== 'undefined') {
+        window.sessionStorage.setItem('eco_last_order_id', String(order.id));
+      }
       toast.success(paymentMethod === 'cod' ? 'COD order placed successfully!' : 'Order placed successfully!');
-
-      setTimeout(() => {
-        router.push('/user/dashboard');
-      }, 1800);
     } catch (error) {
       toast.error(error.message || 'Unable to place order. Please try again.');
     } finally {
@@ -177,6 +183,14 @@ export default function CheckoutPage() {
           <h1 className="text-3xl font-black text-slate-900 mb-3">Order Confirmed!</h1>
           <p className="text-slate-600 mb-3">Thank you for your purchase. Your order has been placed successfully.</p>
           <p className="text-sm text-slate-500 mb-8">Order ID: {placedOrderId}</p>
+          <div className="flex items-center justify-center gap-3">
+            <Link href="/user/dashboard" className="rounded-xl bg-green-600 px-5 py-2.5 text-sm font-semibold text-white">
+              View Dashboard
+            </Link>
+            <Link href="/" className="rounded-xl border border-slate-200 px-5 py-2.5 text-sm font-semibold text-slate-700">
+              Continue Shopping
+            </Link>
+          </div>
         </div>
       </motion.div>
     );

@@ -141,11 +141,11 @@ export default function FloatingChatbot() {
               {message.recommendations?.length ? (
                 <div className="mt-2 space-y-2">
                   {message.recommendations.slice(0, 3).map((product) => (
-                    <div key={product.id} className="rounded-2xl border border-slate-200 p-3 text-left">
+                    <div key={product.id || product._id || product.title} className="rounded-2xl border border-slate-200 p-3 text-left">
                       <p className="text-sm font-bold text-slate-900">{product.title}</p>
                       <p className="mt-1 text-xs text-slate-500">{product.category} | Rs {Number(product.price || 0).toLocaleString('en-IN')}</p>
                       <div className="mt-2 flex gap-2">
-                        <Link href={`/products/${product.id}`} className="rounded-full bg-slate-900 px-3 py-1 text-xs font-semibold text-white">
+                        <Link href={`/products/${product.id || product._id}`} className="rounded-full bg-slate-900 px-3 py-1 text-xs font-semibold text-white">
                           View
                         </Link>
                         <button

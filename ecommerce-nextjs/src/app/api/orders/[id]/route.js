@@ -1,9 +1,10 @@
 import { NextResponse } from 'next/server';
 import connectDB from '@/lib/db';
-import { requireRole } from '@/lib/api-auth';
+import { requireAuth, requireRole } from '@/lib/api-auth';
 import Order, { ORDER_STATUS_FLOW } from '@/models/Order';
 import { sendOrderStatusEmail } from '@/lib/email';
 import { mapOrder } from '@/lib/order-utils';
+import mongoose from 'mongoose';
 
 const VALID_STATUSES = ORDER_STATUS_FLOW;
 
@@ -50,11 +51,48 @@ function recomputeOrderStatus(order) {
   return VALID_STATUSES[minIndex];
 }
 
+export async function GET(request, { params }) {
+  const auth = await requireAuth(request);
+  if (auth.error) {
+    return auth.error;
+  }
+
+  if (!mongoose.Types.ObjectId.isValid(params.id)) {
+    return NextResponse.json({ success: false, message: 'Invalid order id.' }, { status: 400 });
+  }
+
+  await connectDB();
+
+  const baseQuery = { _id: params.id };
+  if (auth.user.role === 'user') {
+    baseQuery.user = auth.user._id;
+  }
+  if (auth.user.role === 'seller') {
+    baseQuery['items.seller'] = auth.user._id;
+  }
+
+  const order = await Order.findOne(baseQuery).populate('user', 'name email role').lean();
+  if (!order) {
+    return NextResponse.json({ success: false, message: 'Order not found.' }, { status: 404 });
+  }
+
+  return NextResponse.json({
+    success: true,
+    data: {
+      order: mapOrder(order, auth.user),
+    },
+  });
+}
+
 export async function PATCH(request, { params }) {
   try {
     const auth = await requireRole(request, ['seller', 'admin']);
     if (auth.error) {
       return auth.error;
+    }
+
+    if (!mongoose.Types.ObjectId.isValid(params.id)) {
+      return NextResponse.json({ success: false, message: 'Invalid order id.' }, { status: 400 });
     }
 
     await connectDB();
@@ -140,11 +178,14 @@ export async function PATCH(request, { params }) {
     await order.save();
 
     const populatedOrder = await Order.findById(order._id).populate('user', 'name email');
-    if ((status === 'shipped' || status === 'delivered') && populatedOrder?.user?.email) {
-      sendOrderStatusEmail(populatedOrder, populatedOrder.user, order.status).catch((e) =>
-        console.error('Order status email error:', e.message)
+    const emailStatuses = ['confirmed', 'shipped', 'delivered'];
+    if (emailStatuses.includes(status) && populatedOrder?.user?.email) {
+      sendOrderStatusEmail(populatedOrder, populatedOrder.user, status).catch((e) =>
+        console.error('[Order] Status email error:', e.message)
       );
     }
+
+    console.log(`[Order] ${populatedOrder._id} status → ${status} by ${auth.user.role}:${auth.user._id}`);
 
     return NextResponse.json({
       success: true,

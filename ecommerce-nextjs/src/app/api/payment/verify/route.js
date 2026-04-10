@@ -5,6 +5,7 @@ import Order from '@/models/Order';
 import { finalizeOrderPayment, mapOrder } from '@/lib/order-utils';
 import { sendEmail, sendOrderConfirmationEmail } from '@/lib/email';
 import { verifyPaymentSignature } from '@/lib/razorpay';
+import mongoose from 'mongoose';
 
 export const runtime = 'nodejs';
 
@@ -26,7 +27,12 @@ export async function POST(request) {
       );
     }
 
-    const order = await Order.findOne({ _id: orderId, user: auth.user._id });
+    const isObjectId = mongoose.Types.ObjectId.isValid(orderId);
+    const order = await Order.findOne(
+      isObjectId
+        ? { _id: orderId, user: auth.user._id }
+        : { 'paymentDetails.razorpayOrderId': orderId, user: auth.user._id }
+    );
     if (!order) {
       return NextResponse.json({ success: false, message: 'Order not found.' }, { status: 404 });
     }

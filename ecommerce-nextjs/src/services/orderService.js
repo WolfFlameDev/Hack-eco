@@ -25,13 +25,22 @@ export async function getOrders(view) {
 }
 
 export async function updateOrderStatus(orderId, status, itemId, trackingDetails) {
-  const response = await fetch(`/api/orders/${orderId}/status`, {
+  const response = await fetch(`/api/orders/${orderId}`, {
     method: 'PATCH',
     headers: {
       'Content-Type': 'application/json',
     },
     credentials: 'include',
     body: JSON.stringify({ status, itemId, trackingDetails }),
+  });
+
+  return parseResponse(response);
+}
+
+export async function getOrderById(orderId) {
+  const response = await fetch(`/api/orders/${orderId}`, {
+    credentials: 'include',
+    cache: 'no-store',
   });
 
   return parseResponse(response);

@@ -10,6 +10,7 @@ import OfferSection from '@/components/ecommerce/OfferSection';
 import ProductCard from '@/components/ProductCard';
 import LoadingSkeleton from '@/components/ecommerce/LoadingSkeleton';
 import { useCart } from '@/hooks/useCart';
+import { useRecentlyViewed } from '@/hooks/useRecentlyViewed';
 import { setCart } from '@/redux/slices/cartSlice';
 import { clearCompare, removeFromCompare } from '@/redux/slices/compareSlice';
 import { getProducts } from '@/services/productService';
@@ -17,6 +18,23 @@ import { addToCart as addToCartRequest } from '@/services/cartService';
 import { useAuth } from '@/hooks/useAuth';
 import Offer from './main/offer';
 import Footer from './main/footer';
+
+function buildCategorySections(products = []) {
+  const grouped = new Map();
+
+  for (const product of products) {
+    const category = product.category || 'Other';
+    if (!grouped.has(category)) {
+      grouped.set(category, []);
+    }
+    grouped.get(category).push(product);
+  }
+
+  return Array.from(grouped.entries()).map(([category, items]) => ({
+    category,
+    products: items,
+  }));
+}
 
 export default function HomePage() {
   const router = useRouter();
@@ -31,6 +49,11 @@ export default function HomePage() {
   const [loading, setLoading] = useState(true);
   const [toastMessage, setToastMessage] = useState('');
   const [isAdding, setIsAdding] = useState(false);
+  const [recommendationSections, setRecommendationSections] = useState({
+    youMayLike: [],
+    trendingNow: [],
+  });
+  const [loadingRecommendations, setLoadingRecommendations] = useState(true);
 
   useEffect(() => {
     let active = true;
@@ -53,6 +76,40 @@ export default function HomePage() {
       active = false;
     };
   }, []);
+
+  useEffect(() => {
+    let active = true;
+
+    async function loadRecommendationSections() {
+      try {
+        setLoadingRecommendations(true);
+        const response = await fetch('/api/recommendations/sections', {
+          credentials: 'include',
+          cache: 'no-store',
+        });
+
+        const payload = await response.json();
+        if (!response.ok || !payload.success || !active) {
+          return;
+        }
+
+        setRecommendationSections({
+          youMayLike: payload.data?.youMayLike ?? [],
+          trendingNow: payload.data?.trendingNow ?? [],
+        });
+      } finally {
+        if (active) {
+          setLoadingRecommendations(false);
+        }
+      }
+    }
+
+    loadRecommendationSections();
+
+    return () => {
+      active = false;
+    };
+  }, [isAuthenticated]);
 
   const filteredProducts = useMemo(() => {
     const query = searchTerm.trim().toLowerCase();
@@ -93,9 +150,8 @@ export default function HomePage() {
   };
 
   const cartQuantity = cartItems.reduce((total, item) => total + item.quantity, 0);
-
-  // Whether compare bar should be visible
-  const showCompareBar = compareItems.length > 0;
+  const categorySections = useMemo(() => buildCategorySections(filteredProducts), [filteredProducts]);
+  const { recentlyViewed } = useRecentlyViewed();
 
   return (
     <div className="min-h-screen bg-[#f8fafb] text-slate-900">
@@ -160,7 +216,7 @@ export default function HomePage() {
           <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
             <div>
               <p className="text-sm uppercase tracking-[0.35em] text-green-600">Product Collection</p>
-              <h3 className="mt-3 text-3xl font-black text-slate-900">Premium products, designed for modern living.</h3>
+              <h3 className="mt-3 text-3xl font-black text-slate-900">Shop by category, one row at a time.</h3>
             </div>
           </div>
 
@@ -173,14 +229,71 @@ export default function HomePage() {
                 <p className="mt-3 text-sm text-slate-500">Try another category or search term to find the perfect item.</p>
               </div>
             ) : (
-              <div className="grid gap-6 sm:grid-cols-2 xl:grid-cols-4">
-                {filteredProducts.map((product) => (
-                  <ProductCard key={product.id} product={product} onAddToCart={handleAddToCart} />
+              <div className="space-y-10">
+                {categorySections.map((section) => (
+                  <section key={section.category} className="rounded-4xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+                    <div className="mb-4 flex items-center justify-between gap-3">
+                      <h4 className="text-2xl font-black text-slate-900">{section.category}</h4>
+                      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">{section.products.length} items</p>
+                    </div>
+                    <div className="-mx-1 flex gap-5 overflow-x-auto px-1 pb-2">
+                      {section.products.map((product) => (
+                        <div key={product.id} className="min-w-[260px] max-w-[280px] flex-1">
+                          <ProductCard product={product} onAddToCart={handleAddToCart} />
+                        </div>
+                      ))}
+                    </div>
+                  </section>
                 ))}
               </div>
             )}
           </div>
         </section>
+
+        <section className="pt-12">
+          <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
+            <div>
+              <p className="text-sm uppercase tracking-[0.35em] text-emerald-600">Intelligent Picks</p>
+              <h3 className="mt-2 text-3xl font-black text-slate-900">Personalized recommendations</h3>
+            </div>
+            <Link href="/user/recommendations" className="rounded-full border border-emerald-200 bg-emerald-50 px-4 py-2 text-xs font-bold uppercase tracking-[0.14em] text-emerald-700">
+              Open AI Assistant
+            </Link>
+          </div>
+
+          {loadingRecommendations ? (
+            <LoadingSkeleton />
+          ) : (
+            <div className="space-y-8">
+              <RecommendationRow title="You may like" items={recommendationSections.youMayLike} onAddToCart={handleAddToCart} />
+              <RecommendationRow title="Trending now" items={recommendationSections.trendingNow} onAddToCart={handleAddToCart} />
+            </div>
+          )}
+        </section>
+
+        {/* ── Recently Viewed ──────────────────────────────────── */}
+        {recentlyViewed.length > 0 && (
+          <section className="pt-12">
+            <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
+              <div>
+                <p className="text-sm uppercase tracking-[0.35em] text-slate-400">Your history</p>
+                <h3 className="mt-2 text-3xl font-black text-slate-900">Recently viewed</h3>
+              </div>
+            </div>
+            <div className="rounded-4xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+              <div className="-mx-1 flex gap-5 overflow-x-auto px-1 pb-2">
+                {recentlyViewed.map((product) => (
+                  <div key={product.id} className="min-w-[260px] max-w-[280px] flex-1">
+                    <ProductCard product={product} onAddToCart={handleAddToCart} />
+                  </div>
+                ))}
+              </div>
+            </div>
+          </section>
+        )}
+
+        {/* ── Shop by Category Icon Grid ───────────────────────── */}
+        <CategoryIconGrid categories={categories.filter((c) => c !== 'All')} onSelect={(cat) => { setActiveCategory(cat); window.scrollTo({ top: 0, behavior: 'smooth' }); }} />
     
       </main>
     <Footer/>
@@ -198,6 +311,69 @@ export default function HomePage() {
     </div>
   );
 }
+
+function RecommendationRow({ title, items, onAddToCart }) {
+  if (!items?.length) {
+    return null;
+  }
+
+  return (
+    <section className="rounded-4xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+      <div className="mb-4 flex items-center justify-between">
+        <h4 className="text-2xl font-black text-slate-900">{title}</h4>
+        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">{items.length} picks</p>
+      </div>
+      <div className="-mx-1 flex gap-5 overflow-x-auto px-1 pb-2">
+        {items.map((product) => (
+          <div key={product.id} className="min-w-[260px] max-w-[280px] flex-1">
+            <ProductCard product={product} onAddToCart={onAddToCart} />
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+// ── Category Icon Grid ────────────────────────────────────────────────────────
+const CATEGORY_ICONS = {
+  'Men Clothing': '👔',
+  'Women Clothing': '👗',
+  'Kids Clothing': '🧒',
+  'Electronics': '💻',
+  'Footwear': '👟',
+  'Accessories': '💍',
+  'Home Decor': '🏠',
+  'Beauty': '💄',
+  'Sports': '⚽',
+  'Grocery': '🛒',
+};
+
+function CategoryIconGrid({ categories, onSelect }) {
+  if (!categories?.length) return null;
+  return (
+    <section className="pt-14">
+      <div className="mb-8 text-center">
+        <p className="text-sm uppercase tracking-[0.35em] text-green-600">Browse by interest</p>
+        <h3 className="mt-2 text-3xl font-black text-slate-900">Shop by category</h3>
+        <p className="mt-2 text-sm text-slate-500">Tap any category to jump straight to the products you love.</p>
+      </div>
+      <div className="grid grid-cols-3 gap-3 sm:grid-cols-5 md:gap-4 lg:grid-cols-10">
+        {categories.map((cat) => (
+          <button
+            key={cat}
+            onClick={() => onSelect(cat)}
+            className="group flex flex-col items-center gap-2 rounded-3xl border border-slate-200 bg-white px-2 py-5 text-center shadow-sm transition hover:-translate-y-1 hover:border-green-300 hover:shadow-lg hover:shadow-green-50"
+          >
+            <span className="text-3xl transition-transform group-hover:scale-110" role="img" aria-label={cat}>
+              {CATEGORY_ICONS[cat] ?? '🛍️'}
+            </span>
+            <span className="text-[11px] font-bold leading-tight text-slate-700 group-hover:text-green-700">{cat}</span>
+          </button>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 // ── Floating Compare Bar ─────────────────────────────────────────────────────
 function CompareBar({ items, onRemove, onClear }) {
   if (!items.length) return null;

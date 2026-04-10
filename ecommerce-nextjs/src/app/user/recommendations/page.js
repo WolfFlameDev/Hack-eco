@@ -133,7 +133,7 @@ export default function RecommendationsPage() {
                   {msg.recommendations?.length ? (
                     <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
                       {msg.recommendations.map((product) => (
-                        <article key={product.id} className="rounded-xl border border-slate-200 bg-white p-3 text-left">
+                        <article key={product.id || product._id || product.title} className="rounded-xl border border-slate-200 bg-white p-3 text-left">
                           <img
                             src={product.image || 'https://via.placeholder.com/640x640?text=Product'}
                             alt={product.title}
@@ -147,9 +147,18 @@ export default function RecommendationsPage() {
                               <li key={`${product.id}-${reason}`}>• {reason}</li>
                             ))}
                           </ul>
-                          <Link href={`/products/${product.id}`} className="mt-3 inline-flex rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white">
+                          <div className="mt-3 flex flex-wrap gap-2">
+                          <Link href={`/products/${product.id || product._id}`} className="inline-flex rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white">
                             View Product
                           </Link>
+                          <button
+                            type="button"
+                            onClick={() => window.dispatchEvent(new CustomEvent('eco:open-chatbot', { detail: { query: `quick view ${product.title}` } }))}
+                            className="inline-flex rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700"
+                          >
+                            Quick Ask
+                          </button>
+                          </div>
                         </article>
                       ))}
                     </div>
