@@ -1,50 +1,70 @@
-import axios from 'axios';
+async function parseResponse(response) {
+  const payload = await response.json();
 
-export const addToCart = async (productId, quantity) => {
-  try {
-    const response = await axios.post('/api/cart', { productId, quantity });
-    return response.data;
-  } catch (error) {
-    console.error('Error adding to cart:', error);
-    throw error;
+  if (!response.ok || !payload.success) {
+    throw new Error(payload.message || 'Cart request failed');
   }
-};
 
-export const fetchCart = async () => {
-  try {
-    const response = await axios.get('/api/cart');
-    return response.data;
-  } catch (error) {
-    console.error('Error fetching cart:', error);
-    throw error;
-  }
-};
+  return payload.data;
+}
 
-export const updateCartItem = async (id, quantity) => {
-  try {
-    const response = await axios.put('/api/cart', { id, quantity });
-    return response.data;
-  } catch (error) {
-    console.error('Error updating cart item:', error);
-    throw error;
-  }
-};
+export async function addToCart(productId, quantity = 1) {
+  const response = await fetch('/api/cart', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    credentials: 'include',
+    body: JSON.stringify({ productId, quantity }),
+  });
 
-export const removeCartItem = async (id) => {
-  try {
-    await axios.delete('/api/cart', { data: { id } });
-  } catch (error) {
-    console.error('Error removing cart item:', error);
-    throw error;
-  }
-};
+  return parseResponse(response);
+}
 
-export const checkout = async (userDetails, cartItems, totalPrice) => {
-  try {
-    const response = await axios.post('/api/checkout', { userDetails, cartItems, totalPrice });
-    return response.data;
-  } catch (error) {
-    console.error('Error during checkout:', error);
-    throw error;
-  }
-};
+export async function fetchCart() {
+  const response = await fetch('/api/cart', {
+    credentials: 'include',
+    cache: 'no-store',
+  });
+
+  return parseResponse(response);
+}
+
+export async function updateCartItem(id, quantity) {
+  const response = await fetch('/api/cart', {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    credentials: 'include',
+    body: JSON.stringify({ id, quantity }),
+  });
+
+  return parseResponse(response);
+}
+
+export async function removeCartItem(id) {
+  const response = await fetch('/api/cart', {
+    method: 'DELETE',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    credentials: 'include',
+    body: JSON.stringify({ id }),
+  });
+
+  return parseResponse(response);
+}
+
+export async function clearServerCart() {
+  const response = await fetch('/api/cart', {
+    method: 'DELETE',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    credentials: 'include',
+    body: JSON.stringify({ clearAll: true }),
+  });
+
+  return parseResponse(response);
+}

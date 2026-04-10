@@ -11,6 +11,7 @@ const userSchema = new mongoose.Schema({
     type: String,
     required: [true, 'Email is required'],
     unique: true,
+    index: true,
     lowercase: true,
     trim: true,
   },
@@ -28,8 +29,6 @@ const userSchema = new mongoose.Schema({
     type: Boolean,
     default: false,
   },
-  otp: String,
-  otpExpiry: Date,
   resetPasswordToken: String,
   resetPasswordExpires: Date,
   profileImage: {
@@ -57,16 +56,21 @@ const userSchema = new mongoose.Schema({
   },
 });
 
+userSchema.index({ email: 1 }, { unique: true });
+
 // Hash password before saving
-userSchema.pre('save', async function (next) {
-  if (!this.isModified('password')) return next();
+userSchema.pre('save', async function () {
+  this.updatedAt = new Date();
+
+  if (!this.isModified('password')) {
+    return;
+  }
 
   try {
     const salt = await bcrypt.genSalt(12);
     this.password = await bcrypt.hash(this.password, salt);
-    next();
   } catch (error) {
-    next(error);
+    throw error;
   }
 });
 
@@ -75,11 +79,10 @@ userSchema.methods.comparePassword = async function (candidatePassword) {
   return await bcrypt.compare(candidatePassword, this.password);
 };
 
-// Remove password from JSON output
+// Remove sensitive fields from JSON output
 userSchema.methods.toJSON = function () {
   const userObject = this.toObject();
   delete userObject.password;
-  delete userObject.verificationToken;
   delete userObject.resetPasswordToken;
   delete userObject.resetPasswordExpires;
   return userObject;

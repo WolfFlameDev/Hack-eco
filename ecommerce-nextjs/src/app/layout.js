@@ -1,5 +1,6 @@
 import { Inter } from 'next/font/google';
 import ReduxProvider from '@/components/ReduxProvider';
+import FloatingChatbot from '@/components/ecommerce/FloatingChatbot';
 import './globals.css';
 
 const inter = Inter({ subsets: ['latin'] });
@@ -28,6 +29,7 @@ export default function RootLayout({ children }) {
       <body className={inter.className}>
         <ReduxProvider>
           {children}
+          <FloatingChatbot />
         </ReduxProvider>
       </body>
     </html>

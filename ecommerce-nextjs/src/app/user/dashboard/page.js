@@ -1,9 +1,12 @@
 'use client';
 
-import { useAuth } from '@/hooks/useAuth';
-import { useRouter } from 'next/navigation';
-import { useEffect } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { useAuth } from '@/hooks/useAuth';
+import Navbar from '@/components/ecommerce/Navbar';
+import { getOrders } from '@/services/orderService';
+import { getDashboardProfile } from '@/services/profileService';
 
 const orders = [
   {
@@ -40,31 +43,97 @@ const statusStyles = {
 };
 
 export default function UserDashboard() {
-  const { user, isAuthenticated, logout, isUser } = useAuth();
   const router = useRouter();
+  const { initialized, isAuthenticated, user, logout } = useAuth();
+  const [orders, setOrders] = useState([]);
+  const [profile, setProfile] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
   useEffect(() => {
-    if (!isAuthenticated) {
-      router.push('/auth/login');
+    if (!initialized) {
       return;
     }
 
-    if (!isUser()) {
-      if (user?.role === 'admin') {
-        router.push('/admin/dashboard');
-      } else if (user?.role === 'seller') {
-        router.push('/seller/dashboard');
+    if (!isAuthenticated) {
+      router.replace('/auth/login?redirect=/user/dashboard');
+      return;
+    }
+
+    if (user?.role !== 'user') {
+      router.replace(user?.role === 'seller' ? '/seller/dashboard' : '/admin/dashboard');
+    }
+  }, [initialized, isAuthenticated, router, user?.role]);
+
+  useEffect(() => {
+    let active = true;
+
+    async function loadOrders() {
+      try {
+        setLoading(true);
+        setError('');
+        const [data, profileData] = await Promise.all([getOrders('user'), getDashboardProfile()]);
+        if (!active) {
+          return;
+        }
+
+        setOrders(data.orders ?? []);
+        setProfile(profileData);
+      } catch (err) {
+        if (!active) {
+          return;
+        }
+
+        setError(err.message || 'Failed to fetch orders');
+      } finally {
+        if (active) {
+          setLoading(false);
+        }
       }
     }
-  }, [isAuthenticated, user, router, isUser]);
 
-  if (!isAuthenticated || !isUser()) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
-      </div>
+    if (isAuthenticated && user?.role === 'user') {
+      loadOrders();
+    }
+
+    return () => {
+      active = false;
+    };
+  }, [isAuthenticated, user?.role]);
+
+  useEffect(() => {
+    if (!(isAuthenticated && user?.role === 'user')) {
+      return;
+    }
+
+    const timer = setInterval(async () => {
+      try {
+        const [data, profileData] = await Promise.all([getOrders('user'), getDashboardProfile()]);
+        setOrders(data.orders ?? []);
+        setProfile(profileData);
+      } catch {
+        // ignore transient poll errors, next cycle retries
+      }
+    }, 15000);
+
+    return () => clearInterval(timer);
+  }, [isAuthenticated, user?.role]);
+
+  const summary = useMemo(() => {
+    return orders.reduce(
+      (acc, order) => {
+        acc.total += order.totalAmount || 0;
+        if (order.status === 'delivered') {
+          acc.delivered += 1;
+        }
+        if (order.status === 'pending') {
+          acc.pending += 1;
+        }
+        return acc;
+      },
+      { total: 0, delivered: 0, pending: 0 }
     );
-  }
+  }, [orders]);
 
   const totalOrders = orders.length;
   const activeDeliveries = orders.filter((order) => order.status !== 'Delivered').length;
@@ -72,169 +141,158 @@ export default function UserDashboard() {
 
   return (
     <div className="min-h-screen bg-slate-50">
-      <header className="bg-white border-b border-slate-200 shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex flex-col gap-4 py-5 md:flex-row md:items-center md:justify-between">
-            <div>
-              <Link href="/user/dashboard" className="text-2xl font-semibold text-slate-900">
-                EcoCommerce
-              </Link>
-              <p className="mt-1 text-sm text-slate-500">Your dashboard for orders, payments, and account support.</p>
-            </div>
-            <div className="flex flex-wrap items-center gap-3">
-              <span className="rounded-full bg-slate-100 px-4 py-2 text-sm text-slate-700">Hello, {user.name}</span>
-              <Link href="/user/cart" className="inline-flex items-center justify-center rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100">
-                View Cart
-              </Link>
-              <button
-                onClick={logout}
-                className="inline-flex items-center justify-center rounded-full bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700"
-              >
-                Logout
-              </button>
-            </div>
+      <Navbar searchTerm="" onSearch={() => {}} cartCount={0} />
+
+      <main className="mx-auto max-w-7xl px-4 pb-16 pt-28 sm:px-6 lg:px-8">
+        <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-black text-slate-900">{profile?.user?.name ? `${profile.user.name}'s Dashboard` : 'My Dashboard'}</h1>
+            <p className="mt-1 text-sm text-slate-600">Track your orders and recent purchases.</p>
+            <p className="mt-2 text-sm text-slate-500">
+              {profile?.user?.email || user?.email || 'No email'}
+              {' · '}
+              {profile?.metrics?.phone || profile?.user?.phone || 'No phone added'}
+            </p>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <Link
+              href="/profile/edit"
+              className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700"
+            >
+              Edit Profile
+            </Link>
+            <Link
+              href="/"
+              className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700"
+            >
+              Continue Shopping
+            </Link>
+            <Link
+              href="/user/recommendations"
+              className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-700"
+            >
+              AI Recommendations
+            </Link>
+            <button
+              onClick={logout}
+              className="rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white"
+            >
+              Logout
+            </button>
           </div>
         </div>
-      </header>
 
-      <main className="max-w-7xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
-        <section className="overflow-hidden rounded-[2rem] bg-gradient-to-r from-emerald-600 to-sky-600 px-6 py-10 text-white shadow-lg shadow-slate-200/30 sm:px-10 sm:py-12">
-          <div className="grid gap-8 lg:grid-cols-[1.7fr_1fr] lg:items-center">
-            <div>
-              <p className="text-sm uppercase tracking-[0.3em] text-emerald-100/80">User Dashboard</p>
-              <h1 className="mt-4 text-3xl font-semibold sm:text-4xl">Manage your sustainable shopping with confidence.</h1>
-              <p className="mt-4 max-w-2xl text-sm leading-7 text-emerald-100/90">
-                Track your recent orders, review account details, and access the tools you need to keep your eco-friendly purchases organized.
-              </p>
-            </div>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <Link href="/shop" className="rounded-3xl bg-white/10 px-5 py-4 text-center text-sm font-semibold text-white ring-1 ring-white/20 hover:bg-white/20">
-                Continue Shopping
-              </Link>
-              <Link href="/user/orders" className="rounded-3xl bg-white px-5 py-4 text-center text-sm font-semibold text-slate-900 hover:bg-slate-100">
-                See My Orders
-              </Link>
-            </div>
-          </div>
+        <section className="mb-8 grid gap-4 md:grid-cols-3">
+          <StatCard label="Total Orders" value={profile?.metrics?.orders ?? orders.length} />
+          <StatCard label="Delivered" value={summary.delivered} />
+          <StatCard label="Total Spent" value={`Rs ${(profile?.metrics?.totalSpent ?? summary.total).toFixed(2)}`} />
         </section>
 
-        <section className="mt-8 grid gap-6 xl:grid-cols-[1.5fr_1fr]">
-          <div className="space-y-6">
-            <div className="grid gap-4 sm:grid-cols-3">
-              <div className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
-                <p className="text-sm font-medium text-slate-500">Total Orders</p>
-                <p className="mt-3 text-3xl font-semibold text-slate-900">{totalOrders}</p>
-              </div>
-              <div className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
-                <p className="text-sm font-medium text-slate-500">Active Deliveries</p>
-                <p className="mt-3 text-3xl font-semibold text-slate-900">{activeDeliveries}</p>
-              </div>
-              <div className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
-                <p className="text-sm font-medium text-slate-500">Latest Order</p>
-                <p className="mt-3 text-3xl font-semibold text-slate-900">{recentOrder.id}</p>
-              </div>
+        <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+          <h2 className="text-xl font-black text-slate-900">My Orders</h2>
+
+          {loading ? <p className="mt-4 text-sm text-slate-500">Loading orders...</p> : null}
+          {!loading && error ? <p className="mt-4 text-sm text-red-600">{error}</p> : null}
+
+          {!loading && !error && orders.length === 0 ? (
+            <div className="mt-6 rounded-2xl border border-dashed border-slate-200 p-8 text-center">
+              <p className="text-slate-600">No orders yet. Start shopping to place your first order.</p>
             </div>
+          ) : null}
 
-            <div className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
-              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <h2 className="text-xl font-semibold text-slate-900">Recent Orders</h2>
-                  <p className="mt-2 text-sm text-slate-500">Monitor the latest updates for your most recent purchases.</p>
-                </div>
-                <Link href="/user/orders" className="inline-flex items-center justify-center rounded-full bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800">
-                  View All Orders
-                </Link>
-              </div>
+          {!loading && !error && orders.length > 0 ? (
+            <div className="mt-6 space-y-4">
+              {orders.map((order) => (
+                <article key={order.id} className="rounded-2xl border border-slate-200 p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-sm font-semibold text-slate-900">Order #{order.id.slice(-8).toUpperCase()}</p>
+                    <p className="text-xs text-slate-500">{new Date(order.createdAt).toLocaleString()}</p>
+                  </div>
 
-              <div className="mt-6 overflow-hidden rounded-[1.75rem] border border-slate-200 bg-slate-50 p-4">
-                <div className="grid gap-4 sm:grid-cols-2">
-                  {orders.slice(0, 2).map((order) => (
-                    <div key={order.id} className="rounded-3xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <p className="text-xs uppercase tracking-[0.24em] text-slate-400">{order.placedAt}</p>
-                          <p className="mt-3 text-base font-semibold text-slate-900">{order.id}</p>
-                        </div>
-                        <span className={`rounded-full px-3 py-1 text-xs font-semibold ${statusStyles[order.status]}`}>
-                          {order.status}
-                        </span>
-                      </div>
-                      <div className="mt-4 flex items-center justify-between text-sm text-slate-500">
-                        <span>{order.items} items</span>
-                        <span>${order.total.toFixed(2)}</span>
-                      </div>
+                  <div className="mt-3 flex flex-wrap items-center gap-3 text-sm">
+                    <StatusBadge label={order.status} />
+                    <PaymentBadge label={order.paymentStatus} />
+                    <span className="font-semibold text-slate-900">Rs {(order.totalAmount ?? 0).toFixed(2)}</span>
+                  </div>
+
+                  {order.trackingDetails?.trackingNumber || order.trackingDetails?.trackingUrl ? (
+                    <div className="mt-3 rounded-lg border border-blue-100 bg-blue-50 p-3 text-xs text-blue-900">
+                      <p className="font-semibold">Shipping</p>
+                      <p>Tracking Number: {order.trackingDetails.trackingNumber || 'Not provided'}</p>
+                      <p>Carrier: {order.trackingDetails.carrier || 'Not provided'}</p>
+                      <p>
+                        Estimated Delivery:{' '}
+                        {order.trackingDetails.estimatedDelivery
+                          ? new Date(order.trackingDetails.estimatedDelivery).toLocaleDateString()
+                          : 'Not provided'}
+                      </p>
+                      {order.trackingDetails.trackingUrl ? (
+                        <a
+                          href={order.trackingDetails.trackingUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="mt-1 inline-block font-semibold text-blue-700 hover:text-blue-900"
+                        >
+                          Track Shipment
+                        </a>
+                      ) : null}
                     </div>
-                  ))}
-                </div>
-              </div>
-            </div>
+                  ) : null}
 
-            <div className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
-              <h2 className="text-xl font-semibold text-slate-900">Helpful Actions</h2>
-              <p className="mt-2 text-sm text-slate-500">Quick links to the tools you use most often.</p>
-              <div className="mt-5 grid gap-3 sm:grid-cols-2">
-                <Link href="/user/cart" className="block rounded-3xl border border-slate-200 bg-slate-50 px-4 py-4 text-left hover:border-slate-300 hover:bg-slate-100">
-                  <p className="font-semibold text-slate-900">Review Cart</p>
-                  <p className="mt-1 text-sm text-slate-500">Complete any items waiting to checkout.</p>
-                </Link>
-                <Link href="/shop" className="block rounded-3xl border border-slate-200 bg-slate-50 px-4 py-4 text-left hover:border-slate-300 hover:bg-slate-100">
-                  <p className="font-semibold text-slate-900">Browse Catalog</p>
-                  <p className="mt-1 text-sm text-slate-500">Find the latest eco-friendly products.</p>
-                </Link>
-                <Link href="/user/orders" className="block rounded-3xl border border-slate-200 bg-slate-50 px-4 py-4 text-left hover:border-slate-300 hover:bg-slate-100">
-                  <p className="font-semibold text-slate-900">Track Orders</p>
-                  <p className="mt-1 text-sm text-slate-500">See all current order statuses.</p>
-                </Link>
-                <a href="mailto:support@eco-commerce.com" className="block rounded-3xl border border-slate-200 bg-slate-50 px-4 py-4 text-left hover:border-slate-300 hover:bg-slate-100">
-                  <p className="font-semibold text-slate-900">Contact Support</p>
-                  <p className="mt-1 text-sm text-slate-500">Get help with account or order questions.</p>
-                </a>
-              </div>
+                  <div className="mt-4 space-y-2">
+                    {(order.items ?? []).map((item) => (
+                      <div key={item.id} className="flex items-center justify-between text-sm">
+                        <span className="text-slate-700">{item.title} x {item.quantity}</span>
+                        <span className="font-medium text-slate-900">Rs {(item.price * item.quantity).toFixed(2)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </article>
+              ))}
             </div>
-          </div>
-
-          <aside className="space-y-6">
-            <div className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
-              <h2 className="text-xl font-semibold text-slate-900">Account Summary</h2>
-              <div className="mt-5 space-y-4 text-sm text-slate-600">
-                <div className="flex justify-between border-b border-slate-200 pb-3">
-                  <span>Name</span>
-                  <span className="font-medium text-slate-900">{user.name}</span>
-                </div>
-                <div className="flex justify-between border-b border-slate-200 pb-3">
-                  <span>Email</span>
-                  <span className="font-medium text-slate-900">{user.email}</span>
-                </div>
-                <div className="flex justify-between border-b border-slate-200 pb-3">
-                  <span>Role</span>
-                  <span className="font-medium text-slate-900 capitalize">{user.role}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Verified</span>
-                  <span className={`font-medium ${user.isVerified ? 'text-emerald-600' : 'text-amber-600'}`}>
-                    {user.isVerified ? 'Yes' : 'No'}
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            <div className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
-              <h2 className="text-xl font-semibold text-slate-900">Order Insights</h2>
-              <p className="mt-2 text-sm text-slate-500">Stay informed about upcoming deliveries and current shipping status.</p>
-              <div className="mt-5 grid gap-4">
-                <div className="rounded-3xl bg-slate-50 p-4">
-                  <p className="text-sm text-slate-500">Next delivery</p>
-                  <p className="mt-2 text-lg font-semibold text-slate-900">{recentOrder.delivery}</p>
-                </div>
-                <div className="rounded-3xl bg-slate-50 p-4">
-                  <p className="text-sm text-slate-500">Pending shipments</p>
-                  <p className="mt-2 text-lg font-semibold text-slate-900">{activeDeliveries}</p>
-                </div>
-              </div>
-            </div>
-          </aside>
+          ) : null}
         </section>
       </main>
     </div>
+  );
+}
+
+function StatCard({ label, value }) {
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+      <p className="text-sm text-slate-500">{label}</p>
+      <p className="mt-2 text-2xl font-black text-slate-900">{value}</p>
+    </div>
+  );
+}
+
+function StatusBadge({ label }) {
+  const map = {
+    pending: 'bg-amber-100 text-amber-800',
+    confirmed: 'bg-cyan-100 text-cyan-800',
+    processing: 'bg-indigo-100 text-indigo-800',
+    shipped: 'bg-blue-100 text-blue-800',
+    delivered: 'bg-green-100 text-green-800',
+  };
+
+  return (
+    <span className={`rounded-full px-3 py-1 text-xs font-semibold ${map[label] ?? 'bg-slate-100 text-slate-700'}`}>
+      {label}
+    </span>
+  );
+}
+
+function PaymentBadge({ label }) {
+  const map = {
+    created: 'bg-slate-100 text-slate-700',
+    paid: 'bg-green-100 text-green-800',
+    failed: 'bg-red-100 text-red-800',
+  };
+
+  return (
+    <span className={`rounded-full px-3 py-1 text-xs font-semibold ${map[label] ?? 'bg-slate-100 text-slate-700'}`}>
+      payment: {label}
+    </span>
   );
 }

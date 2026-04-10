@@ -41,20 +41,11 @@ export default function LoginPage() {
         description: 'Welcome back to EcoShop!',
       });
 
-      // Store remember me preference
       if (rememberMe) {
         localStorage.setItem('rememberMe', 'true');
       }
 
-      // Redirect based on role
-      const user = JSON.parse(localStorage.getItem('user'));
-      if (user?.role === 'admin') {
-        router.push('/admin/dashboard');
-      } else if (user?.role === 'seller') {
-        router.push('/seller/dashboard');
-      } else {
-        router.push('/user/dashboard');
-      }
+      router.replace(response.redirectPath || '/user/dashboard');
     } catch (error) {
       toast.error('Login failed', {
         description: error.error || 'Please check your credentials and try again.',
@@ -129,7 +120,7 @@ export default function LoginPage() {
         </div>
 
         <ButtonLoader loading={loading} type="submit">
-          Sign in
+          Log in
         </ButtonLoader>
 
         {/* Social Login UI */}
