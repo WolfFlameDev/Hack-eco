@@ -61,6 +61,18 @@ export const sendPasswordResetEmail = async (email, token) => {
   return await sendEmail(email, 'Reset Your Password - EcoCommerce', html);
 };
 
+export const sendWelcomeEmail = async (email, name) => {
+  const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+      <h2>Welcome to EcoCommerce, ${name}!</h2>
+      <p>Your email has been verified and your account is now active.</p>
+      <p>Start exploring eco-friendly products and enjoy sustainable shopping.</p>
+    </div>
+  `;
+
+  return await sendEmail(email, 'Welcome to EcoCommerce!', html);
+};
+
 export const sendOTPEmail = async (email, otp) => {
   const html = `
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">

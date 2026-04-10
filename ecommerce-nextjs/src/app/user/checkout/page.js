@@ -1,8 +1,10 @@
+'use client';
+
 import { useCart } from '@/hooks/useCart';
 import { useState } from 'react';
 
 export default function CheckoutPage() {
-  const { cartItems, totalPrice, clearCartItems } = useCart();
+  const { cartItems = [], totalPrice = 0, clearCartItems } = useCart();
   const [userDetails, setUserDetails] = useState({
     name: '',
     address: '',

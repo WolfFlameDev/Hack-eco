@@ -3,7 +3,7 @@
 //   "quantity": 1
 // }
 
-async function addToCart(productId, quantity = 1) {
+export async function addToCart(productId, quantity = 1) {
   const res = await fetch('/api/cart/add', {
     method: 'POST',
     headers: {
