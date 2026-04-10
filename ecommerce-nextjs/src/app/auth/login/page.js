@@ -23,7 +23,7 @@ const loginSchema = z.object({
 export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
-  const { login, loading } = useAuth();
+  const { login, loading, demoLogin } = useAuth();
   const router = useRouter();
 
   const {
@@ -49,6 +49,20 @@ export default function LoginPage() {
     } catch (error) {
       toast.error('Login failed', {
         description: error.error || 'Please check your credentials and try again.',
+      });
+    }
+  };
+
+  const handleDemoLogin = async () => {
+    try {
+      const response = await demoLogin();
+      toast.success('Demo login successful!', {
+        description: `Signed in as ${response.user.name}`,
+      });
+      router.push('/user/dashboard');
+    } catch (error) {
+      toast.error('Demo login failed', {
+        description: error.error || 'Unable to sign in with the demo account.',
       });
     }
   };
@@ -139,7 +153,14 @@ export default function LoginPage() {
         </div>
 
         {/* Guest Access */}
-        <div className="mt-6 text-center">
+        <div className="mt-6 space-y-3 text-center">
+          <button
+            type="button"
+            onClick={handleDemoLogin}
+            className="inline-flex items-center justify-center w-full rounded-xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white hover:bg-slate-800 transition-colors"
+          >
+            Login with demo account: cyber / 1234
+          </button>
           <Link
             href="/products"
             className="text-sm font-medium text-gray-600 hover:text-gray-800 transition-colors flex items-center justify-center"

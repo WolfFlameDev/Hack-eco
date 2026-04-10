@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -14,7 +14,6 @@ import InputField from '@/components/InputField';
 import ButtonLoader from '@/components/ButtonLoader';
 import { CheckCircle, ArrowRight, Key } from 'lucide-react';
 
-// Validation schema
 const resetPasswordSchema = z.object({
   email: z.string().email('Please enter a valid email address'),
   otp: z.string().min(6, 'OTP must be 6 digits').max(6, 'OTP must be 6 digits'),
@@ -25,26 +24,37 @@ const resetPasswordSchema = z.object({
   path: ['confirmPassword'],
 });
 
-export default function ResetPasswordPage() {
+export default function ResetPasswordClient() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [submitted, setSubmitted] = useState(false);
 
   const { resetPassword, loading } = useAuth();
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   const {
     register,
     handleSubmit,
-    watch,
     formState: { errors },
   } = useForm({
     resolver: zodResolver(resetPasswordSchema),
   });
 
+  const token = searchParams?.get('token');
+
+  useEffect(() => {
+    if (!token) {
+      toast.error('Invalid reset link', {
+        description: 'Please check your email for the correct reset link.',
+      });
+      router.push('/auth/forgot-password');
+    }
+  }, [token, router]);
+
   const onSubmit = async (data) => {
     try {
-      await resetPassword(data.email, data.otp, data.password);
+      await resetPassword(token, data.password);
       setSubmitted(true);
       toast.success('Password reset successful!', {
         description: 'You can now sign in with your new password.',
@@ -132,24 +142,6 @@ export default function ResetPasswordPage() {
 
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
         <InputField
-          label="Email address"
-          type="email"
-          placeholder="Enter your email"
-          icon="email"
-          error={errors.email?.message}
-          {...register('email')}
-        />
-
-        <InputField
-          label="OTP"
-          type="text"
-          placeholder="Enter 6-digit OTP"
-          icon="otp"
-          error={errors.otp?.message}
-          {...register('otp')}
-        />
-
-        <InputField
           label="New Password"
           type="password"
           placeholder="Enter new password (min 6 characters)"
@@ -173,7 +165,7 @@ export default function ResetPasswordPage() {
           {...register('confirmPassword')}
         />
 
-        <ButtonLoader loading={loading} type="submit">
+        <ButtonLoader loading={loading} type="submit" disabled={!token}>
           Reset password
         </ButtonLoader>
 
@@ -185,9 +177,8 @@ export default function ResetPasswordPage() {
             Back to sign in
           </Link>
         </div>
-      }
-    >
-      <ResetPasswordClient />
-    </Suspense>
+      </form>
+      <Toaster position="top-right" />
+    </AuthLayout>
   );
 }

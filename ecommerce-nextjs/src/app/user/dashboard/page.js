@@ -8,6 +8,40 @@ import Navbar from '@/components/ecommerce/Navbar';
 import { getOrders } from '@/services/orderService';
 import { getDashboardProfile } from '@/services/profileService';
 
+const orders = [
+  {
+    id: 'ODR-1047',
+    placedAt: '2026-03-28',
+    status: 'Shipped',
+    total: 74.98,
+    items: 3,
+    delivery: 'Apr 5, 2026',
+  },
+  {
+    id: 'ODR-1039',
+    placedAt: '2026-03-14',
+    status: 'Delivered',
+    total: 42.5,
+    items: 2,
+    delivery: 'Mar 20, 2026',
+  },
+  {
+    id: 'ODR-1021',
+    placedAt: '2026-02-26',
+    status: 'Processing',
+    total: 129.99,
+    items: 5,
+    delivery: 'Apr 1, 2026',
+  },
+];
+
+const statusStyles = {
+  Delivered: 'bg-green-100 text-green-800',
+  Shipped: 'bg-blue-100 text-blue-800',
+  Processing: 'bg-yellow-100 text-yellow-800',
+  Cancelled: 'bg-red-100 text-red-800',
+};
+
 export default function UserDashboard() {
   const router = useRouter();
   const { initialized, isAuthenticated, user, logout } = useAuth();
@@ -100,6 +134,10 @@ export default function UserDashboard() {
       { total: 0, delivered: 0, pending: 0 }
     );
   }, [orders]);
+
+  const totalOrders = orders.length;
+  const activeDeliveries = orders.filter((order) => order.status !== 'Delivered').length;
+  const recentOrder = orders[0];
 
   return (
     <div className="min-h-screen bg-slate-50">
